@@ -24,7 +24,7 @@ const app = express();
 const dir = path.join(__dirname, '../public/images');
 app.use(
     cors({
-        origin: ['http://localhost:3000', 'http://localhost:3002', "https://devbandhucareadmin.revanai.in", "https://bandhucareadmin.revanai.in", "https://bandhu.care"],
+        origin: ['http://localhost:3000', "https://docassist.aryan-dev.in"],
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization', 'x-refresh-token'],
         credentials: true,
