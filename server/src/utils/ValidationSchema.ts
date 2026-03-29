@@ -46,13 +46,29 @@ export const googleLoginIdTokenSchema = z.object({
   userType: z.string().min(1, 'User type is required'),
 });
 
+const documentationSlugSchema = z.enum([
+  'stripe',
+  'livekit',
+  'firebase',
+  'openai',
+  'nextjs',
+]);
+
 export const createConversationSchema = z.object({
   name: z.string().min(1, 'Conversation name is required').optional().default('New Chat'),
+  documentation: documentationSlugSchema.optional().default('stripe'),
 });
 
-export const updateConversationSchema = z.object({
-  name: z.string().min(1, 'Conversation name is required')
-});
+export const updateConversationSchema = z
+  .object({
+    name: z.string().min(1, 'Conversation name is required').optional(),
+    documentation: documentationSlugSchema.optional(),
+  })
+  .refine((data) => data.name !== undefined || data.documentation !== undefined, {
+    message: 'Provide name and/or documentation',
+  });
+
+export { documentationSlugSchema };
 
 export const createMessageSchema = z
   .object({
@@ -60,6 +76,7 @@ export const createMessageSchema = z
     content: z.string().optional().default(''),
     provider: z.enum(['openai', 'groq', 'anthropic', 'google']).default('groq'),
     model: z.string().optional().default('openai/gpt-oss-120b'),
+    documentation: documentationSlugSchema.optional(),
     media: z
       .array(
         z.object({
@@ -83,3 +100,10 @@ export const createMessageSchema = z
       });
     }
   });
+
+export const createScheduleItemSchema = z.object({
+  kind: z.enum(['reminder', 'questionnaire', 'appointment']),
+  title: z.string().min(1, 'Title is required'),
+  scheduledAt: z.coerce.date(),
+  isActive: z.boolean().optional().default(true),
+});

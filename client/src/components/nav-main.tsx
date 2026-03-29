@@ -5,6 +5,7 @@ import {
   Flag,
   Ellipsis,
   Pin,
+  Pencil,
   Trash2,
   type LucideIcon,
 } from "lucide-react"
@@ -13,9 +14,11 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+
 import { Button } from "./ui/button"
 import {
   DropdownMenu,
@@ -24,12 +27,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useState } from "react"
+
+import { useState, useRef, useMemo } from "react"
+import { APP_DOCUMENTATION_OPTIONS } from "@/lib/app-documentation-options"
+import { parseDocSlug } from "@/lib/doc-preference"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { deleteConversation } from "@/lib/axios"
+import { deleteConversation, updateConversationName } from "@/lib/axios"
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
+import { Input } from "./ui/input"
 
 export function NavMain({
   items,
@@ -37,110 +44,228 @@ export function NavMain({
 }: {
   items: {
     title: string
-    url: string
+    url?: string
     icon: LucideIcon
     isActive?: boolean
+    badge?: string
+    onClick?: () => void
   }[]
   conversations: {
     _id: string
     name: string
+    documentation?: string
   }[]
 }) {
+  const queryClient = useQueryClient()
+
+  const groupedConversations = useMemo(() => {
+    const map = new Map<
+      string,
+      { _id: string; name: string; documentation?: string }[]
+    >()
+    for (const c of conversations) {
+      const key = parseDocSlug(c.documentation)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(c)
+    }
+    const order = APP_DOCUMENTATION_OPTIONS.map((o) => o.id)
+    return order
+      .filter((id) => map.has(id))
+      .map((id) => ({
+        docId: id,
+        label: APP_DOCUMENTATION_OPTIONS.find((o) => o.id === id)?.label ?? id,
+        items: map.get(id)!,
+      }))
+  }, [conversations])
+
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
-const queryClient = useQueryClient();
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState("")
+
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  const startRename = (id: string, name: string) => {
+    setRenamingId(id)
+    setRenameValue(name)
+
+    setTimeout(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }, 0)
+  }
+
+  const saveRename = async (id: string, original: string) => {
+    const next = renameValue.trim()
+
+    setRenamingId(null)
+
+    if (!next || next === original) return
+
+    try {
+      const res = await updateConversationName(id, next)
+      if (res.status === 200) {
+        queryClient.invalidateQueries({ queryKey: ["conversations"] })
+      }
+    } catch {
+      console.error("Failed to rename conversation")
+    }
+  }
+
   return (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.title} className="mx-2">
           <SidebarMenuButton asChild isActive={item.isActive}>
-            <Link href={item.url}>
-              <item.icon/>
-              <span>{item.title}</span>
-            </Link>
+            {item.onClick ? (
+              <button
+                type="button"
+                onClick={item.onClick}
+                className="flex w-full items-center gap-2 rounded-lg transition-colors"
+              >
+                <item.icon />
+                <span className="flex-1 truncate text-left">{item.title}</span>
+                {item.badge ? (
+                  <SidebarMenuBadge className="ml-auto">
+                    {item.badge}
+                  </SidebarMenuBadge>
+                ) : null}
+              </button>
+            ) : (
+              <Link
+                href={item.url ?? "#"}
+                className="flex w-full items-center gap-2 rounded-lg transition-colors"
+              >
+                <item.icon />
+                <span className="flex-1 truncate">{item.title}</span>
+                {item.badge ? (
+                  <SidebarMenuBadge className="ml-auto">
+                    {item.badge}
+                  </SidebarMenuBadge>
+                ) : null}
+              </Link>
+            )}
           </SidebarMenuButton>
         </SidebarMenuItem>
       ))}
-      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <SidebarGroupLabel>Your Chats</SidebarGroupLabel>
-        <SidebarMenu>
-          {conversations.map((conversation) => (
-            <SidebarMenuItem key={conversation._id}>
-              <SidebarMenuButton asChild>
-                <Link
-                  href={`/c/${conversation._id}`}
-                  className={cn(
-                    "group/item relative flex w-full items-center rounded-md px-2 py-1.5",
-                    "transition-colors hover:bg-accent",
-                    openMenuId === conversation._id && "bg-accent"
-                  )}
-                >
-                  <span className="truncate pr-6">{conversation.name}</span>
-                  <DropdownMenu
-                    open={openMenuId === conversation._id}
-                    onOpenChange={(isOpen) => {
-                      setOpenMenuId(isOpen ? conversation._id : null)
-                    }}
-                  >
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setOpenMenuId(conversation._id)
-                        }}
+      {groupedConversations.map((group) => (
+        <SidebarGroup
+          key={group.docId}
+          className="group-data-[collapsible=icon]:hidden"
+        >
+          <SidebarGroupLabel className="text-primary/90">
+            {group.label}
+          </SidebarGroupLabel>
+          <SidebarMenu>
+            {group.items.map((c) => {
+              const isRenaming = renamingId === c._id
+              return (
+                <SidebarMenuItem key={c._id}>
+                  <SidebarMenuButton asChild>
+                    {isRenaming ? (
+                      <div className="relative flex h-9 w-full items-center overflow-hidden rounded-lg border border-primary/25 bg-primary/5 px-2">
+                        <Input
+                          ref={inputRef}
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onBlur={() => saveRename(c._id, c.name)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur()
+                            if (e.key === "Escape") {
+                              setRenamingId(null)
+                              setRenameValue(c.name)
+                            }
+                          }}
+                          className="min-w-0 flex-1 border-none bg-transparent pr-8 text-sm font-medium shadow-none outline-none selection:bg-muted/50 selection:text-foreground focus-visible:border-transparent focus-visible:ring-0"
+                        />
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-1/2 right-1 h-7 w-7 shrink-0 -translate-y-1/2"
+                        >
+                          <Ellipsis className="h-4 w-4 opacity-60" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Link
+                        href={`/c/${c._id}`}
                         className={cn(
-                          "absolute top-1/2 right-1 -translate-y-1/2 cursor-pointer",
-                          "h-7 w-7 rounded",
-                          "opacity-0 transition-opacity",
-                          "group-hover/item:opacity-100",
-                          openMenuId === conversation._id && "opacity-100",
-                          "hover:bg-accent focus-visible:ring-0"
+                          "group/item relative flex h-9 w-full items-center overflow-hidden rounded-lg border border-transparent px-2",
+                          "transition-colors hover:border-border/60 hover:bg-sidebar-accent/80",
+                          openMenuId === c._id &&
+                            "border-border/50 bg-sidebar-accent/90"
                         )}
                       >
-                        <Ellipsis className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-40" align="start">
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem key={"pin-chat"}>
-                          <Pin />
-                          Pin Chat
-                        </DropdownMenuItem>
-                        <DropdownMenuItem key={"archieve"}>
-                          <Archive />
-                          Archieve
-                        </DropdownMenuItem>
-                        <DropdownMenuItem key={"report"}>
-                          <Flag />
-                          Report
-                        </DropdownMenuItem>
-                        <DropdownMenuItem key={"delete"} variant="destructive" onClick={async () => {
-              try {
-              const res = await deleteConversation(conversation._id);
-              if (res.status == 200) {toast.success(res.data.message);   queryClient.invalidateQueries({
-                queryKey: ["conversations"],
-              });}
-              else {toast.error(res.data.message);};
+                        <span className="min-w-0 flex-1 truncate pr-8 text-sm">
+                          {c.name}
+                        </span>
 
-            } catch (err) {
-              console.log("Error in Deleting Conversation", err);
-            }
-          }}
-        >
-                          <Trash2 />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroup>
+                        <DropdownMenu
+                          open={openMenuId === c._id}
+                          onOpenChange={(v) => setOpenMenuId(v ? c._id : null)}
+                        >
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setOpenMenuId(c._id)
+                              }}
+                              className={cn(
+                                "absolute top-1/2 right-1 h-7 w-7 shrink-0 -translate-y-1/2",
+                                "opacity-0 transition-opacity group-hover/item:opacity-100",
+                                openMenuId === c._id && "opacity-100"
+                              )}
+                            >
+                              <Ellipsis className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+
+                          <DropdownMenuContent align="start" className="w-40">
+                            <DropdownMenuGroup>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setOpenMenuId(null)
+                                  startRename(c._id, c.name)
+                                }}
+                              >
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Rename
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={async (e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  const res = await deleteConversation(c._id)
+                                  if (res.status === 200) {
+                                    toast.success(res.data.message)
+                                    queryClient.invalidateQueries({
+                                      queryKey: ["conversations"],
+                                    })
+                                  }
+                                }}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </Link>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+      ))}
     </SidebarMenu>
   )
 }

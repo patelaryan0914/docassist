@@ -14,6 +14,7 @@ import authRoutes from './routes/auth.routes.js';
 import conversationRoutes from './routes/conversation.route.js';
 import messageRoutes from './routes/message.route.js';
 import uploadRoutes from './routes/upload.route.js';
+import scheduleRoutes from './routes/schedule.route.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -43,6 +44,7 @@ app.use('/v1/api/auth', authRoutes);
 app.use('/v1/api/conversation', conversationRoutes);
 app.use('/v1/api/messages', messageRoutes);
 app.use('/v1/api/upload', uploadRoutes);
+app.use('/v1/api/schedule', scheduleRoutes);
 
 app.use(notFound);
 

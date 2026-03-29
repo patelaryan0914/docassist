@@ -1,0 +1,15 @@
+{
+  "name": "docassist",
+  "version": "0.1.0",
+  "description": "MCP-style tool surface for DocAssist: select docs, query with RAG-style answers, generate snippets, summarize sections.",
+  "repositoryLayer": "client/src/lib/docassist",
+  "router": "router.ts",
+  "skills": [
+    "skills/select-documentation.ts",
+    "skills/query-documentation.ts",
+    "skills/generate-code-snippet.ts",
+    "skills/summarize-docs.ts"
+  ],
+  "uiLayer": "client/src/components/landing",
+  "notes": "Map each tools/*.json entry to invokeDocAssistSkill in router.ts. Extend with server-side retrieval when wiring a real MCP server."
+}

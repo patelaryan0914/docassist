@@ -10,7 +10,7 @@ export default async function Page({
 }) {
   const { conversationId } = await params
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
         <Chat conversationId={conversationId} />

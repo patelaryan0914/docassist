@@ -17,6 +17,7 @@ import {
   VideoIcon,
   XIcon,
 } from "lucide-react"
+import Image from "next/image"
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react"
 import { createContext, useCallback, useContext, useMemo } from "react"
 
@@ -91,7 +92,7 @@ const renderAttachmentImage = (
   isGrid: boolean
 ) =>
   isGrid ? (
-    <img
+    <Image
       alt={filename || "Image"}
       className="size-full object-cover"
       height={96}
@@ -99,7 +100,7 @@ const renderAttachmentImage = (
       width={96}
     />
   ) : (
-    <img
+    <Image
       alt={filename || "Image"}
       className="size-full rounded object-cover"
       height={20}
@@ -204,16 +205,17 @@ export const Attachment = ({
       <div
         className={cn(
           "group relative",
-          variant === "grid" && "size-24 overflow-hidden rounded-lg",
+          variant === "grid" &&
+            "size-24 overflow-hidden rounded-xl border border-border/60 bg-card/40 shadow-sm ring-1 ring-border/30",
           variant === "inline" && [
             "flex h-8 cursor-pointer items-center gap-1.5 select-none",
-            "rounded-md border border-border px-1.5",
+            "rounded-full border border-border/80 bg-card/50 px-2",
             "text-sm font-medium transition-all",
-            "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+            "hover:border-primary/25 hover:bg-muted/60 hover:text-accent-foreground",
           ],
           variant === "list" && [
-            "flex w-full items-center gap-3 rounded-lg border p-3",
-            "hover:bg-accent/50",
+            "flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card/40 p-3",
+            "hover:border-primary/20 hover:bg-muted/40",
           ],
           className
         )}

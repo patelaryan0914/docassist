@@ -14,6 +14,7 @@ import { getConversationsModel } from "../models/conversations.model";
 import { getMessagesModel } from "../models/message.model";
 import type { IMessage, IMessageMediaItem } from "../models/message.model";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { normalizeDocumentationSlug } from "../constants/documentation.js";
 
 type MessageInputMedia = {
   url: string;
@@ -189,25 +190,48 @@ export const createMessage = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { content, provider, model, conversationId, media = [] } = req.body as {
+    const {
+      content,
+      provider,
+      model,
+      conversationId,
+      media = [],
+      documentation: documentationFromBody,
+    } = req.body as {
       content: string;
       provider?: string;
       model?: string;
       conversationId?: string;
       media?: MessageInputMedia[];
+      documentation?: string;
     };
 
     const db = await getConnection();
     const Conversation = getConversationsModel(db);
     const Message = getMessagesModel(db);
     let newConversationId: any = conversationId ?? null;
+    let effectiveDocumentation = normalizeDocumentationSlug(
+      documentationFromBody,
+    );
 
     if (!conversationId) {
       const conversation = await Conversation.create({
         userId: req.userId,
         name: "New Conversation",
+        documentation: effectiveDocumentation,
       });
       newConversationId = conversation._id;
+    } else {
+      const existing = await Conversation.findOne({
+        _id: conversationId,
+        userId: req.userId,
+      }).select("documentation");
+      if (!existing) {
+        throw ApiError.notFound("Conversation not found");
+      }
+      effectiveDocumentation = normalizeDocumentationSlug(
+        existing.documentation,
+      );
     }
 
     if (!provider || !model) {
@@ -234,6 +258,7 @@ export const createMessage = async (
     writeSse(res, {
       type: "start",
       newConversationId,
+      documentation: effectiveDocumentation,
       userMessage: serializeMessage(userMessage),
     });
 
@@ -320,7 +345,7 @@ export const getMessagesByConversation = async (
     const conversation = await Conversation.findOne({
       _id: conversationId,
       userId: req.userId,
-    }).select("_id");
+    }).select("_id name documentation createdAt updatedAt");
 
     if (!conversation) {
       throw ApiError.notFound("Conversation not found");
@@ -336,7 +361,16 @@ export const getMessagesByConversation = async (
       .status(200)
       .json(
         ApiResponse.success(
-          { messages: messages.map((m) => serializeMessage(m)) },
+          {
+            messages: messages.map((m) => serializeMessage(m)),
+            conversation: {
+              _id: String(conversation._id),
+              name: conversation.name,
+              documentation: normalizeDocumentationSlug(
+                conversation.documentation,
+              ),
+            },
+          },
           "Messages retrieved successfully",
         ),
       );

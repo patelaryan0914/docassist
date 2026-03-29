@@ -1,19 +1,11 @@
 "use client"
 
-import {
-  BadgeCheck,
-  Bell,
-  ChevronsUpDown,
-  CreditCard,
-  LogOut,
-  Sparkles,
-} from "lucide-react"
+import { ChevronsUpDown, LogOut, Monitor, Moon, Sun } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -30,6 +22,8 @@ import { signOutStore } from "@/store/authSlice"
 import { useRouter } from "next/navigation"
 import { signOut } from "@/lib/axios"
 import { toast } from "sonner"
+import { useTheme } from "next-themes"
+import { cn } from "@/lib/utils"
 
 export function NavUser({
   user,
@@ -43,6 +37,7 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const dispatch = useAppDispatch()
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
 
   return (
     <SidebarMenu>
@@ -51,9 +46,9 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="rounded-xl data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
+              <Avatar className="h-8 w-8 rounded-lg ring-1 ring-primary/15">
                 <AvatarImage src={user.avatar} alt={user.name} />
                 <AvatarFallback className="rounded-lg">CN</AvatarFallback>
               </Avatar>
@@ -65,7 +60,7 @@ export function NavUser({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-xl border-border/80"
             side={isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={4}
@@ -83,40 +78,53 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <Sparkles />
-                Upgrade to Pro
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+            <DropdownMenuLabel className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              Theme
+            </DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => setTheme("light")}
+              className={cn(
+                "rounded-lg",
+                theme === "light" && "bg-primary/10 text-primary focus:bg-primary/15"
+              )}
+            >
+              <Sun />
+              Light
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setTheme("dark")}
+              className={cn(
+                "rounded-lg",
+                theme === "dark" && "bg-primary/10 text-primary focus:bg-primary/15"
+              )}
+            >
+              <Moon />
+              Dark
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setTheme("system")}
+              className={cn(
+                "rounded-lg",
+                theme === "system" && "bg-primary/10 text-primary focus:bg-primary/15"
+              )}
+            >
+              <Monitor />
+              System
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell />
-                Notifications
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem  onClick={async () => {
-            try {
-              const res = await signOut();
-              if (res.status == 200) toast.success(res.data.message);
-              dispatch(signOutStore());
-              router.push("/sign-in");
-            } catch (err) {
-              toast.error("Something Went Wrong.");
-              console.log("Logout Error", err);
-            }
-          }}
-        >
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  const res = await signOut()
+                  if (res.status == 200) toast.success(res.data.message)
+                  dispatch(signOutStore())
+                  router.push("/sign-in")
+                } catch (err) {
+                  toast.error("Something Went Wrong.")
+                  console.log("Logout Error", err)
+                }
+              }}
+            >
               <LogOut />
               Log out
             </DropdownMenuItem>

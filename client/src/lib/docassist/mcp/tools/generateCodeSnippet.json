@@ -1,0 +1,19 @@
+{
+  "name": "generateCodeSnippet",
+  "description": "Produce a developer-ready code snippet aligned with the selected documentation and stated intent.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "documentationId": {
+        "type": "string",
+        "enum": ["stripe", "livekit", "firebase", "openai", "nextjs"]
+      },
+      "intent": { "type": "string", "minLength": 1 },
+      "language": {
+        "type": "string",
+        "enum": ["typescript", "javascript", "python", "bash"]
+      }
+    },
+    "required": ["documentationId", "intent"]
+  }
+}

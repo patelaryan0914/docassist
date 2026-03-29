@@ -175,11 +175,42 @@ export const signOut = async () => {
     return response;
 };
 
-export const getConversations = async (page: number = 1, limit: number = 10) => {
+export const getConversations = async (
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+) => {
     const response = await api.get(`/api/conversation`, {
-        params: { page, limit },
+        params: {
+            page,
+            limit,
+            ...(search?.trim() ? { search: search.trim() } : {}),
+        },
         withCredentials: true,
     });
+    return response;
+};
+
+export type ConversationSummary = {
+    _id: string;
+    name: string;
+    documentation: string;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+export const createConversation = async (body?: {
+    name?: string;
+    documentation?: string;
+}) => {
+    const response = await api.post(
+        `/api/conversation`,
+        {
+            name: body?.name ?? "New Chat",
+            documentation: body?.documentation ?? "stripe",
+        },
+        { withCredentials: true },
+    );
     return response;
 };
 
@@ -191,11 +222,36 @@ export const getMessages = async (conversationId: string, page: number = 1, limi
     return response;
 };
 
+export type ConversationMeta = {
+    _id: string;
+    name: string;
+    documentation: string;
+};
+
 export const deleteConversation = async (conversationId: string) => {
     const response = await api.delete(`/api/conversation/${conversationId}`, {
         withCredentials: true,
     });
     return response;
+};
+
+export const updateConversation = async (
+    conversationId: string,
+    body: { name?: string; documentation?: string },
+) => {
+    const response = await api.put(
+        `/api/conversation/${conversationId}`,
+        body,
+        { withCredentials: true },
+    );
+    return response;
+};
+
+export const updateConversationName = async (
+    conversationId: string,
+    name: string,
+) => {
+    return updateConversation(conversationId, { name });
 };
 
 export type UploadedMedia = {
@@ -218,7 +274,6 @@ export const uploadMedia = async (file: File): Promise<UploadedMedia> => {
     return response.data?.data as UploadedMedia;
 };
 
-/** Message shape returned in SSE `start` / `done` events (matches server serialization). */
 export type SerializedMessage = {
     _id: string;
     conversationId: string;
@@ -239,6 +294,7 @@ export type CreateMessageBody = {
     conversationId?: string;
     provider?: "openai" | "groq" | "anthropic" | "google";
     model?: string;
+    documentation?: string;
     media?: Array<{
         url: string;
         mimeType: string;
@@ -251,6 +307,7 @@ export type CreateMessageStreamHandlers = {
     onStart?: (payload: {
         newConversationId: string | null;
         userMessage: SerializedMessage;
+        documentation?: string;
     }) => void;
     onDelta?: (text: string) => void;
     onDone?: (payload: { assistantMessage: SerializedMessage }) => void;
@@ -283,9 +340,6 @@ async function refreshAccessTokenForFetch(): Promise<string | null> {
     }
 }
 
-/**
- * POST /api/messages — Server-Sent Events stream (start → data → done | error).
- */
 export async function createMessageStream(
     body: CreateMessageBody,
     handlers: CreateMessageStreamHandlers,
@@ -299,6 +353,7 @@ export async function createMessageStream(
         content: body.content,
         provider: body.provider ?? "groq",
         model: body.model ?? "openai/gpt-oss-120b",
+        ...(body.documentation ? { documentation: body.documentation } : {}),
         media: body.media ?? [],
         ...(body.conversationId ? { conversationId: body.conversationId } : {}),
     };
@@ -363,6 +418,10 @@ export async function createMessageStream(
                             ? String(data.newConversationId)
                             : null,
                     userMessage: data.userMessage as SerializedMessage,
+                    documentation:
+                        typeof data.documentation === "string"
+                            ? data.documentation
+                            : undefined,
                 });
             } else if (type === "data") {
                 handlers.onDelta?.(String(data.text ?? ""));

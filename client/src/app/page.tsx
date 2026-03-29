@@ -1,15 +1,12 @@
-import { AppSidebar } from "@/components/app-sidebar"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import type { Metadata } from "next"
+import { LandingPage } from "@/components/landing/landing-page"
 
-import { Chat } from "@/components/chat"
+export const metadata: Metadata = {
+  title: "DocAssist — Chat with developer documentation",
+  description:
+    "Select Stripe, LiveKit, Firebase, and more — ask questions, get instant context-aware answers with code snippets.",
+}
 
-export default async function Page() {
-  return (
-    <SidebarProvider defaultOpen={false}>
-      <AppSidebar />
-      <SidebarInset>
-        <Chat />
-      </SidebarInset>
-    </SidebarProvider>
-  )
+export default function Page() {
+  return <LandingPage />
 }

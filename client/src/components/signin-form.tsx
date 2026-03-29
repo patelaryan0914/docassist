@@ -1,8 +1,7 @@
 "use client"
 
-import { GalleryVerticalEnd } from "lucide-react"
-
 import { cn } from "@/lib/utils"
+import { DocAssistMark } from "@/components/doc-assist-mark"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -53,7 +52,7 @@ export function SigninForm({
         localStorage.setItem("refreshToken", res.data.data.refreshToken)
         toast.success(res.data.message)
         dispatch(signInStore(res.data.data));
-        router.push("/")
+        router.push("/chat")
       }
     },
     onError: (error: unknown) => {
@@ -77,19 +76,24 @@ export function SigninForm({
     <div className={cn("flex flex-col", className)} {...props}>
       <form onSubmit={handleSubmit(onSubmit)}>
         <FieldGroup className="gap-4">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <a
-              href="#"
-              className="flex flex-col items-center gap-2 font-medium"
-            >
-              <div className="flex size-8 items-center justify-center rounded-md">
-                <GalleryVerticalEnd className="size-6" />
-              </div>
-              <span className="sr-only">Doc Assist</span>
-            </a>
-            <h1 className="text-xl font-bold">Welcome to Doc Assist</h1>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <DocAssistMark href="/" size="lg" />
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Welcome back
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Sign in to keep chatting with your docs
+              </p>
+            </div>
             <FieldDescription>
-              Don&apos;t have an account? <Link href="/sign-up">Sign up</Link>
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/sign-up"
+                className="font-medium text-primary hover:underline"
+              >
+                Sign up
+              </Link>
             </FieldDescription>
           </div>
           <Field data-invalid={!!errors.email_number}>
@@ -117,7 +121,11 @@ export function SigninForm({
             <FieldError errors={[errors.password]} />
           </Field>
           <Field>
-            <Button type="submit" disabled={signInMutation.isPending}>
+            <Button
+              type="submit"
+              disabled={signInMutation.isPending}
+              className="h-10 w-full rounded-full shadow-md shadow-primary/20"
+            >
               {signInMutation.isPending ? "Signing in…" : "Sign in"}
             </Button>
           </Field>

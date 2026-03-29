@@ -1,0 +1,15 @@
+{
+  "name": "queryDocumentation",
+  "description": "Ask a natural-language question against the selected documentation corpus. Returns an answer, optional code, and source references.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "documentationId": {
+        "type": "string",
+        "enum": ["stripe", "livekit", "firebase", "openai", "nextjs"]
+      },
+      "query": { "type": "string", "minLength": 1 }
+    },
+    "required": ["documentationId", "query"]
+  }
+}

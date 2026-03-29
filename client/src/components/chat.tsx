@@ -7,8 +7,10 @@ import {
   Copy,
   Ellipsis,
   Flag,
+  Menu,
   MessageCircleDashed,
   Pin,
+  RefreshCcw,
   Share,
   ThumbsDown,
   ThumbsUp,
@@ -23,12 +25,46 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip"
+import {
+  Message,
+  MessageAction,
+  MessageActions,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message"
 import { useState } from "react"
 import { ChatInput } from "./chat-input"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { createMessageStream, getMessages } from "@/lib/axios"
+import {
+  createConversation,
+  createMessageStream,
+  getMessages,
+  updateConversation,
+} from "@/lib/axios"
+import type { ConversationMeta } from "@/lib/axios"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
+import { useSidebar } from "./ui/sidebar"
+import { AppShellBackground } from "./app-shell-background"
+import { APP_DOCUMENTATION_OPTIONS } from "@/lib/app-documentation-options"
+import type { DocSlug } from "@/lib/docassist/types"
+import {
+  parseDocSlug,
+  readLastDocumentation,
+  writeLastDocumentation,
+} from "@/lib/doc-preference"
+import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import Image from "next/image"
 
 const STREAMING_ASSISTANT_ID = "__streaming__"
 
@@ -45,33 +81,35 @@ type ChatMessageRow = {
 }
 
 export function Chat({ conversationId }: { conversationId?: string }) {
+  const { toggleSidebar } = useSidebar()
   const router = useRouter()
   const queryClient = useQueryClient()
   const [messages, setMessages] = useState<ChatMessageRow[]>([])
   const [isSending, setIsSending] = useState(false)
+  const [draftDocumentation, setDraftDocumentation] =
+    useState<DocSlug>("stripe")
+  const [docConfirmOpen, setDocConfirmOpen] = useState(false)
+  const [pendingDocumentation, setPendingDocumentation] =
+    useState<DocSlug | null>(null)
   const [messageFeedback, setMessageFeedback] = useState<
     Record<string, "up" | "down" | null>
   >({})
   const pendingConversationIdRef = React.useRef<string | null>(null)
   const didAutoScrollOnConversationRef = React.useRef<string | null>(null)
-  const scrollAreaRef = React.useRef<HTMLDivElement | null>(null)
   const bottomRef = React.useRef<HTMLDivElement | null>(null)
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
 
   const isNearBottom = React.useCallback(() => {
-    const el = scrollAreaRef.current
-    if (!el) return true
-    const threshold = 120
-    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+    if (typeof document === "undefined") return true
+    const threshold = 160
+    const doc = document.documentElement
+    const y = window.scrollY ?? doc.scrollTop
+    const visibleBottom = y + window.innerHeight
+    return doc.scrollHeight - visibleBottom < threshold
   }, [])
 
   const scrollToBottom = React.useCallback(
     (behavior: ScrollBehavior = "smooth") => {
-      const el = scrollAreaRef.current
-      if (el) {
-        el.scrollTo({ top: el.scrollHeight, behavior })
-        return
-      }
       bottomRef.current?.scrollIntoView({ behavior, block: "end" })
     },
     []
@@ -87,12 +125,106 @@ export function Chat({ conversationId }: { conversationId?: string }) {
     []
   )
 
+  const copyToClipboard = React.useCallback((content: string) => {
+    void navigator.clipboard.writeText(content)
+    toast.success("Copied to clipboard")
+  }, [])
+
   const { data: messagesData, isLoading } = useQuery({
     queryKey: ["messages", conversationId],
     enabled: !!conversationId,
     queryFn: () => getMessages(conversationId as string),
-    placeholderData: (prev) => prev,
   })
+
+  const conversationMeta = messagesData?.data?.data?.conversation as
+    | ConversationMeta
+    | undefined
+
+  React.useEffect(() => {
+    setDraftDocumentation(readLastDocumentation())
+  }, [])
+
+  const activeDocumentation: DocSlug = React.useMemo(() => {
+    if (conversationId) {
+      return parseDocSlug(conversationMeta?.documentation)
+    }
+    return draftDocumentation
+  }, [conversationId, conversationMeta?.documentation, draftDocumentation])
+
+  const handleDocumentationSelect = React.useCallback(
+    async (next: DocSlug) => {
+      if (next === activeDocumentation) return
+
+      if (conversationId && isLoading) {
+        toast.info("Still loading this chat…")
+        return
+      }
+
+      if (!conversationId) {
+        if (messages.length === 0) {
+          setDraftDocumentation(next)
+          writeLastDocumentation(next)
+          return
+        }
+        setPendingDocumentation(next)
+        setDocConfirmOpen(true)
+        return
+      }
+
+      if (messages.length === 0) {
+        try {
+          await updateConversation(conversationId, { documentation: next })
+          await queryClient.invalidateQueries({
+            queryKey: ["messages", conversationId],
+          })
+          await queryClient.invalidateQueries({ queryKey: ["conversations"] })
+          const label = APP_DOCUMENTATION_OPTIONS.find(
+            (o) => o.id === next
+          )?.label
+          toast.success(
+            label ? `Documentation set to ${label}` : "Documentation updated"
+          )
+        } catch (e) {
+          toast.error(
+            e instanceof Error ? e.message : "Could not update documentation"
+          )
+        }
+        return
+      }
+
+      setPendingDocumentation(next)
+      setDocConfirmOpen(true)
+    },
+    [
+      activeDocumentation,
+      conversationId,
+      isLoading,
+      messages.length,
+      queryClient,
+    ]
+  )
+
+  const confirmDocumentationSwitch = React.useCallback(async () => {
+    if (!pendingDocumentation) return
+    try {
+      const res = await createConversation({
+        documentation: pendingDocumentation,
+      })
+      const id = res.data?.data?.newConversation?._id as string | undefined
+      if (!id) throw new Error("No conversation id returned")
+      const label =
+        APP_DOCUMENTATION_OPTIONS.find((o) => o.id === pendingDocumentation)
+          ?.label ?? pendingDocumentation
+      writeLastDocumentation(pendingDocumentation)
+      toast.success(`Started new chat with ${label} docs`)
+      setDocConfirmOpen(false)
+      setPendingDocumentation(null)
+      router.push(`/c/${id}`)
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not start a new chat")
+    }
+  }, [pendingDocumentation, queryClient, router])
 
   React.useEffect(() => {
     if (didAutoScrollOnConversationRef.current !== conversationId) {
@@ -101,14 +233,10 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   }, [conversationId])
 
   React.useEffect(() => {
-    const el = scrollAreaRef.current
-    if (!el) return
-    const onScroll = () => {
-      setShowScrollToLatest(!isNearBottom())
-    }
+    const onScroll = () => setShowScrollToLatest(!isNearBottom())
     onScroll()
-    el.addEventListener("scroll", onScroll)
-    return () => el.removeEventListener("scroll", onScroll)
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
   }, [isNearBottom])
 
   React.useEffect(() => {
@@ -159,6 +287,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
           {
             content: trimmed,
             media,
+            documentation: activeDocumentation,
             ...(conversationId ? { conversationId } : {}),
           },
           {
@@ -245,7 +374,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         setIsSending(false)
       }
     },
-    [conversationId, isSending, queryClient, router]
+    [conversationId, activeDocumentation, isSending, queryClient, router]
   )
 
   const renderMedia = React.useCallback(
@@ -265,31 +394,33 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             const label = item.fileName || `Attachment ${index + 1}`
             if (isImage) {
               return (
-                <a
+                <Link
                   key={`${item.url}-${index}`}
                   href={item.url}
                   target="_blank"
                   rel="noreferrer"
                   className="block"
                 >
-                  <img
+                  <Image
                     src={item.url}
                     alt={label}
-                    className="h-28 w-full rounded-xl border object-cover"
+                    width={100}
+                    height={100}
+                    className="h-28 w-full rounded-xl border border-border/60 object-cover shadow-sm"
                   />
-                </a>
+                </Link>
               )
             }
             return (
-              <a
+              <Link
                 key={`${item.url}-${index}`}
                 href={item.url}
                 target="_blank"
                 rel="noreferrer"
-                className="col-span-2 block rounded-md border px-3 py-2 text-sm hover:bg-muted/60"
+                className="col-span-2 block rounded-xl border border-border/60 bg-card/40 px-3 py-2 text-sm transition-colors hover:border-primary/25 hover:bg-muted/50"
               >
                 {label}
-              </a>
+              </Link>
             )
           })}
         </div>
@@ -298,38 +429,130 @@ export function Chat({ conversationId }: { conversationId?: string }) {
     []
   )
 
-  return (
-    <div className="relative flex h-dvh flex-col bg-background">
-      <header className="flex h-12 items-center gap-2 border-b px-4">
-        <div className="flex w-full items-center justify-between">
-          <div>hello</div>
+  const retryAssistantResponse = React.useCallback(
+    (assistantMessageId: string) => {
+      if (isSending) return
+      const assistantIndex = messages.findIndex(
+        (m) => m._id === assistantMessageId
+      )
+      if (assistantIndex <= 0) return
 
-          {conversationId ? (
+      for (let i = assistantIndex - 1; i >= 0; i--) {
+        const candidate = messages[i]
+        if (candidate.sender === "user") {
+          void handleSend(candidate.content, candidate.media ?? [])
+          return
+        }
+      }
+    },
+    [handleSend, isSending, messages]
+  )
+
+  const docLabel =
+    APP_DOCUMENTATION_OPTIONS.find((d) => d.id === activeDocumentation)
+      ?.label ?? activeDocumentation
+
+  return (
+    <div className="relative flex min-h-svh flex-1 flex-col bg-background">
+      <AppShellBackground />
+      <header className="sticky top-0 z-30 flex min-h-14 shrink-0 flex-col gap-1 border-b border-border/60 bg-background/95 px-4 py-2 supports-backdrop-filter:backdrop-blur-xl sm:flex-row sm:items-center sm:gap-2 sm:py-0">
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
             <div className="flex items-center gap-2">
-              <Button variant="ghost" className="cursor-pointer">
-                <Share />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={toggleSidebar}
+                className="shrink-0 md:hidden"
+              >
+                <Menu className="size-5" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 max-w-[min(100%,220px)] cursor-pointer justify-between gap-2 truncate rounded-full border-border/80 bg-card/50 shadow-sm transition-colors hover:border-primary/30 hover:bg-card/80"
+                  >
+                    <span className="truncate font-medium">{docLabel}</span>
+                    <ChevronDown className="size-4 shrink-0 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="w-52 rounded-xl border-border/80"
+                >
+                  <DropdownMenuGroup>
+                    {APP_DOCUMENTATION_OPTIONS.map((opt) => (
+                      <DropdownMenuItem
+                        key={opt.id}
+                        onClick={() => void handleDocumentationSelect(opt.id)}
+                        className={cn(
+                          "rounded-lg",
+                          activeDocumentation === opt.id &&
+                            "bg-primary/10 text-primary focus:bg-primary/15 focus:text-primary"
+                        )}
+                      >
+                        {opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Badge
+                variant="secondary"
+                className="hidden shrink-0 text-[10px] font-medium sm:inline-flex"
+              >
+                {docLabel}
+              </Badge>
+            </div>
+            <p className="truncate text-xs text-muted-foreground sm:max-w-[min(100%,280px)]">
+              Chatting with:{" "}
+              <span className="font-medium text-foreground">
+                {docLabel} Docs
+              </span>
+            </p>
+          </div>
+          {conversationId ? (
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden cursor-pointer rounded-full sm:inline-flex"
+              >
+                <Share className="size-4" />
                 Share
               </Button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <Ellipsis />
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="rounded-full"
+                  >
+                    <Ellipsis className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
 
-                <DropdownMenuContent className="w-40" align="end">
+                <DropdownMenuContent
+                  className="w-44 rounded-xl border-border/80"
+                  align="end"
+                >
                   <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                      <Pin /> Pin Chat
+                    <DropdownMenuItem className="rounded-lg">
+                      <Pin /> Pin chat
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg">
                       <Archive /> Archive
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg">
                       <Flag /> Report
                     </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive">
+                    <DropdownMenuItem
+                      variant="destructive"
+                      className="rounded-lg"
+                    >
                       <Trash2 /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
@@ -339,160 +562,145 @@ export function Chat({ conversationId }: { conversationId?: string }) {
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <MessageCircleDashed />
+                <Button variant="ghost" size="icon-sm" className="rounded-full">
+                  <MessageCircleDashed className="size-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Temporary chat</TooltipContent>
+              <TooltipContent>New chat</TooltipContent>
             </Tooltip>
           )}
         </div>
       </header>
 
-      <div ref={scrollAreaRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex flex-1 flex-col">
         {isLoading && conversationId ? (
-          <div className="flex h-full items-center justify-center px-4">
+          <div className="flex min-h-[50svh] flex-1 items-center justify-center px-4">
             <p className="text-muted-foreground">Loading messages…</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center px-4">
-            <h1 className="text-3xl font-semibold text-muted-foreground">
-              What’s on your mind today?
+          <div className="flex min-h-[50svh] flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+            <p className="text-xs font-semibold tracking-widest text-primary uppercase">
+              DocAssist
+            </p>
+            <h1 className="max-w-md text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+              <span className="text-muted-foreground">Ask anything about </span>
+              <span className="bg-linear-to-r from-foreground via-primary to-chart-2 bg-clip-text text-transparent">
+                {docLabel}
+              </span>
             </h1>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Instant, context-aware answers with code — same flow as the
+              landing demo.
+            </p>
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6 pb-44">
+          <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8 pb-6">
             {messages.map((message) => (
-              <div key={message._id}>
+              <Message
+                key={message._id}
+                from={message.sender === "user" ? "user" : "assistant"}
+                className={cn(
+                  "w-full max-w-full",
+                  message.sender === "user" ? "items-end" : "items-start"
+                )}
+              >
                 {message.sender === "user" ? (
-                  <div className="group flex w-full flex-col items-end gap-1">
+                  <div className="flex w-full flex-col items-end gap-1">
                     {renderMedia(message.media, "right")}
                     {message.content.trim().length > 0 && (
-                      <div className="wrap-break-words max-w-[70%] rounded-[22px] bg-secondary px-4 py-2.5 leading-6 whitespace-pre-wrap">
+                      <MessageContent className="wrap-break-words max-w-[min(100%,85%)] rounded-full whitespace-pre-wrap">
                         {message.content}
-                      </div>
+                      </MessageContent>
                     )}
-                    <div className="flex items-center gap-0.5 pl-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground"
-                            onClick={() => {
-                              void navigator.clipboard.writeText(
-                                message.content
-                              )
-                              toast.success("Copied to clipboard")
-                            }}
-                          >
-                            <Copy className="size-4" strokeWidth={1.75} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">Copy</TooltipContent>
-                      </Tooltip>
-                    </div>
+                    <MessageActions className="gap-0.5 pl-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <MessageAction
+                        tooltip="Copy"
+                        label="Copy"
+                        className="h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground"
+                        onClick={() => copyToClipboard(message.content)}
+                      >
+                        <Copy className="size-4" strokeWidth={1.75} />
+                      </MessageAction>
+                    </MessageActions>
                   </div>
                 ) : (
-                  <div className="group flex w-full flex-col items-start gap-1">
-                    <div className="wrap-break-words max-w-[70%] rounded-[22px] px-4 py-2.5 leading-6 whitespace-pre-wrap">
-                      {message.content}
+                  <div className="flex w-full flex-col items-start gap-1">
+                    <MessageContent className="wrap-break-words max-w-[min(100%,92%)] border-none bg-transparent whitespace-pre-wrap">
+                      <MessageResponse>{message.content}</MessageResponse>
                       {renderMedia(message.media, "left")}
                       {message._id === STREAMING_ASSISTANT_ID && (
-                        <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-foreground align-middle" />
+                        <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary align-middle" />
                       )}
-                    </div>
+                    </MessageContent>
                     {message._id !== STREAMING_ASSISTANT_ID &&
                       message.content.trim().length > 0 && (
-                        <div className="flex items-center gap-0.5 pl-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground"
-                                onClick={() => {
-                                  void navigator.clipboard.writeText(
-                                    message.content
-                                  )
-                                  toast.success("Copied to clipboard")
-                                }}
-                              >
-                                <Copy className="size-4" strokeWidth={1.75} />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">Copy</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className={cn(
-                                  "h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground",
-                                  messageFeedback[message._id] === "up" &&
-                                    "text-foreground"
-                                )}
-                                onClick={() =>
-                                  toggleFeedback(message._id, "up")
-                                }
-                              >
-                                <ThumbsUp
-                                  className="size-4"
-                                  strokeWidth={1.75}
-                                />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">
-                              Good response
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className={cn(
-                                  "h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground",
-                                  messageFeedback[message._id] === "down" &&
-                                    "text-foreground"
-                                )}
-                                onClick={() =>
-                                  toggleFeedback(message._id, "down")
-                                }
-                              >
-                                <ThumbsDown
-                                  className="size-4"
-                                  strokeWidth={1.75}
-                                />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">
-                              Bad response
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
+                        <MessageActions className="gap-0.5 pl-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                          <MessageAction
+                            tooltip="Regenerate response"
+                            label="Retry"
+                            className="h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground"
+                            onClick={() => retryAssistantResponse(message._id)}
+                            disabled={isSending}
+                          >
+                            <RefreshCcw
+                              className={cn(
+                                "size-4",
+                                isSending && "animate-spin"
+                              )}
+                              strokeWidth={1.75}
+                            />
+                          </MessageAction>
+                          <MessageAction
+                            tooltip="Copy"
+                            label="Copy"
+                            className="h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground"
+                            onClick={() => copyToClipboard(message.content)}
+                          >
+                            <Copy className="size-4" strokeWidth={1.75} />
+                          </MessageAction>
+                          <MessageAction
+                            tooltip="Good response"
+                            label="Like"
+                            className={cn(
+                              "h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground",
+                              messageFeedback[message._id] === "up" &&
+                                "text-foreground"
+                            )}
+                            onClick={() => toggleFeedback(message._id, "up")}
+                          >
+                            <ThumbsUp className="size-4" strokeWidth={1.75} />
+                          </MessageAction>
+                          <MessageAction
+                            tooltip="Bad response"
+                            label="Dislike"
+                            className={cn(
+                              "h-8 w-8 cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground",
+                              messageFeedback[message._id] === "down" &&
+                                "text-foreground"
+                            )}
+                            onClick={() => toggleFeedback(message._id, "down")}
+                          >
+                            <ThumbsDown className="size-4" strokeWidth={1.75} />
+                          </MessageAction>
+                        </MessageActions>
                       )}
                   </div>
                 )}
-              </div>
+              </Message>
             ))}
-            <div ref={bottomRef} />
           </div>
         )}
+        <div ref={bottomRef} className="h-px w-full shrink-0" aria-hidden />
       </div>
-      <div className="pointer-events-none absolute right-0 bottom-0 left-0 z-10">
+
+      <footer className="sticky bottom-0 z-30 mt-auto shrink-0 bg-transparent px-4 pt-2 pb-3">
         <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2">
-          {showScrollToLatest && (
+          {showScrollToLatest ? (
             <Button
               type="button"
               size="icon"
               variant="outline"
-              className="pointer-events-auto h-9 w-9 cursor-pointer rounded-full border bg-background text-foreground"
+              className="h-10 w-10 shrink-0 cursor-pointer rounded-full border-border/80 bg-card/90 text-foreground shadow-lg shadow-primary/15 supports-backdrop-filter:backdrop-blur-md"
               onClick={() => {
                 scrollToBottom("smooth")
                 setShowScrollToLatest(false)
@@ -500,15 +708,39 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             >
               <ChevronDown className="size-4" />
             </Button>
-          )}
-          <div className="pointer-events-auto w-full">
-            <ChatInput onSend={handleSend} isSending={isSending} />
-          </div>
+          ) : null}
+          <ChatInput onSend={handleSend} isSending={isSending} />
         </div>
-        <p className="mx-auto max-w-3xl bg-background px-3 py-2 text-center text-xs text-muted-foreground">
+        <p className="mx-auto h-full max-w-3xl bg-background py-2 text-center text-xs text-muted-foreground">
           DocAssist can make mistakes. Check important info.
         </p>
-      </div>
+      </footer>
+
+      <AlertDialog
+        open={docConfirmOpen}
+        onOpenChange={(open) => {
+          setDocConfirmOpen(open)
+          if (!open) setPendingDocumentation(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start a new chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Switching documentation will start a new chat. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              onClick={() => void confirmDocumentationSwitch()}
+            >
+              Confirm
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

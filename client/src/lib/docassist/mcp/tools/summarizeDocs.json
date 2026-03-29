@@ -1,0 +1,15 @@
+{
+  "name": "summarizeDocs",
+  "description": "Summarize documentation themes for a corpus; optional section hint narrows the summary.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "documentationId": {
+        "type": "string",
+        "enum": ["stripe", "livekit", "firebase", "openai", "nextjs"]
+      },
+      "sectionHint": { "type": "string" }
+    },
+    "required": ["documentationId"]
+  }
+}

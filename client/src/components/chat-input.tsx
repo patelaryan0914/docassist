@@ -4,15 +4,7 @@ import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import {
-  ArrowUp,
-  Plus,
-  AudioLines,
-  Loader2,
-  Paperclip,
-  X,
-  Camera,
-} from "lucide-react"
+import { ArrowUp, Plus, Loader2, Paperclip } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip"
 import {
@@ -20,7 +12,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import MediaAttachments from "./media-attachments"
@@ -30,9 +21,7 @@ import { toast } from "sonner"
 type ChatAttachment = {
   filename: string
   id: string
-  /** IANA type, e.g. image/jpeg */
   mimeType: string
-  /** Server category: image | audio | video | document */
   mediaType: "image" | "audio" | "video" | "document"
   type: "file"
   url: string
@@ -51,13 +40,12 @@ export function ChatInput({
       mimeType: string
       fileName?: string
       mediaType?: "image" | "audio" | "video" | "document"
-    }>,
+    }>
   ) => void | Promise<void>
   isSending?: boolean
   disabled?: boolean
 } = {}) {
   const [value, setValue] = React.useState("")
-  const [dropDownValues, setDropDownValues] = React.useState<string[]>([])
   const [attachments, setAttachments] = React.useState(initialAttachments)
   const [isUploading, setIsUploading] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
@@ -66,7 +54,7 @@ export function ChatInput({
     setAttachments((prev) => prev.filter((a) => a.id !== id))
   }, [])
 
-  const expanded = value.trim().length > 0 || dropDownValues.length > 0
+  const expanded = value.trim().length > 0
   const hasAttachments = attachments.length > 0
   const submit = value.trim().length > 0 || attachments.length > 0
 
@@ -92,13 +80,13 @@ export function ChatInput({
               type: "file" as const,
               url: uploadedMedia.url,
             }
-          }),
+          })
         )
         setAttachments((prev) => [...prev, ...uploaded])
         toast.success(
           uploaded.length === 1
             ? "File uploaded"
-            : `${uploaded.length} files uploaded`,
+            : `${uploaded.length} files uploaded`
         )
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Upload failed")
@@ -107,7 +95,7 @@ export function ChatInput({
         event.target.value = ""
       }
     },
-    [],
+    []
   )
 
   const handleSend = React.useCallback(async () => {
@@ -122,7 +110,7 @@ export function ChatInput({
         mimeType: attachment.mimeType,
         fileName: attachment.filename,
         mediaType: attachment.mediaType,
-      })),
+      }))
     )
     setValue("")
     setAttachments([])
@@ -134,12 +122,12 @@ export function ChatInput({
       e.preventDefault()
       void handleSend()
     },
-    [handleSend],
+    [handleSend]
   )
   return (
     <Card
       className={cn(
-        "mx-auto grid w-full max-w-3xl grid-cols-[auto_1fr_auto] gap-0 rounded-[28px] py-1",
+        "mx-auto grid w-full max-w-3xl grid-cols-[auto_1fr_auto] gap-0 rounded-2xl border-border/80 bg-card/70 py-1 shadow-lg ring-1 shadow-primary/5 ring-border/40 supports-backdrop-filter:backdrop-blur-md",
         expanded
           ? hasAttachments
             ? "[grid-template-areas:'files_files_files''textarea_textarea_textarea''media_tags_voice']"
@@ -171,11 +159,11 @@ export function ChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Ask anything"
           className={cn(
-            "min-h-8 border-0 bg-transparent focus-visible:border-0 focus-visible:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
+            "min-h-8 border-0 bg-transparent text-[15px] placeholder:text-muted-foreground focus-visible:border-0 focus-visible:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
             expanded && "min-h-16"
           )}
+          placeholder="Ask anything about your docs…"
         />
       </div>
       <div
@@ -191,7 +179,7 @@ export function ChatInput({
                 <Button
                   size="icon"
                   variant="outline"
-                  className="cursor-pointer rounded-full"
+                  className="cursor-pointer rounded-full border-border/80 bg-background/50 hover:border-primary/30"
                 >
                   <Plus />
                 </Button>
@@ -201,64 +189,26 @@ export function ChatInput({
               <p>Add Files or More</p>
             </TooltipContent>
           </Tooltip>
-          <DropdownMenuContent align="start" side="top">
+          <DropdownMenuContent
+            align="start"
+            side="top"
+            className="rounded-xl border-border/80"
+          >
             <DropdownMenuGroup>
               <DropdownMenuItem key={"photos-files"} onClick={handlePickFiles}>
                 <Paperclip />
                 Add photos & files
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                key={"livekit"}
-                onClick={() => setDropDownValues(["livekit"])}
-                className={cn(
-                  dropDownValues.includes("livekit") &&
-                    "text-blue-500 hover:text-blue-500"
-                )}
-              >
-                Livekit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                key={"stripe"}
-                onClick={() => setDropDownValues(["stripe"])}
-                className={cn(
-                  dropDownValues.includes("stripe") &&
-                    "text-blue-500 hover:text-blue-500"
-                )}
-              >
-                Stripe
-              </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-      <div
-        className={cn(
-          "flex items-center justify-center",
-          dropDownValues.length > 0 && "block py-1 [grid-area:tags]"
-        )}
-      >
-        {dropDownValues.map((value) => (
-          <Button
-            key={value}
-            className="group cursor-pointer gap-2 rounded-full bg-primary p-3 text-white"
-            onClick={() =>
-              setDropDownValues(dropDownValues.filter((v) => v !== value))
-            }
-          >
-            <X className="hidden h-4 w-4 group-hover:block" />
-            <Camera className="block h-4 w-4 group-hover:hidden" />
-            {value}
-          </Button>
-        ))}
       </div>
       <div className="flex items-center justify-center px-2 [grid-area:voice]">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               size="icon"
-              variant="outline"
-              className="cursor-pointer rounded-full bg-primary text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground"
+              className="cursor-pointer rounded-full shadow-md shadow-primary/25"
               disabled={
                 Boolean(disabled) ||
                 Boolean(isSending) ||
@@ -272,7 +222,8 @@ export function ChatInput({
               ) : submit ? (
                 <ArrowUp />
               ) : (
-                <AudioLines />
+                // <AudioLines />
+                <ArrowUp />
               )}
             </Button>
           </TooltipTrigger>
@@ -282,9 +233,9 @@ export function ChatInput({
                 ? "Sending…"
                 : isUploading
                   ? "Uploading…"
-                : submit
-                  ? "Send"
-                  : "Use Voice"}
+                  : submit
+                    ? "Send"
+                    : "Use Voice"}
             </p>
           </TooltipContent>
         </Tooltip>

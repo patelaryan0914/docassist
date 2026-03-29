@@ -1,0 +1,14 @@
+{
+  "name": "selectDocumentation",
+  "description": "Choose which vendor or framework documentation DocAssist should use for subsequent queries.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "documentationId": {
+        "type": "string",
+        "enum": ["stripe", "livekit", "firebase", "openai", "nextjs"]
+      }
+    },
+    "required": ["documentationId"]
+  }
+}
