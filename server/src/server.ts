@@ -15,6 +15,8 @@ import conversationRoutes from './routes/conversation.route.js';
 import messageRoutes from './routes/message.route.js';
 import uploadRoutes from './routes/upload.route.js';
 import scheduleRoutes from './routes/schedule.route.js';
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.dev" });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
