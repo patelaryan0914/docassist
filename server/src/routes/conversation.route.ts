@@ -4,13 +4,13 @@ import {
     getAllConversations,
     deleteConversation,
     updateConversation,
-} from "../controllers/conversations.controller";
-import { auth } from "../middlewares/authentication.middleware"
-import { validate } from "../middlewares/validate.middleware";
+} from "../controllers/conversations.controller.js";
+import { auth } from "../middlewares/authentication.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
 import {
     createConversationSchema,
     updateConversationSchema,
-} from "../utils/ValidationSchema";
+} from "../utils/ValidationSchema.js";
 const router = Router();
 
 router.route("/")

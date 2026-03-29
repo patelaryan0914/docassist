@@ -10,9 +10,9 @@ import {
 import { resolveModel } from "../utils/AiProvider.js";
 import { getConnection } from "../utils/Connections.js";
 import { ApiError } from "../utils/ApiError.js";
-import { getConversationsModel } from "../models/conversations.model";
-import { getMessagesModel } from "../models/message.model";
-import type { IMessage, IMessageMediaItem } from "../models/message.model";
+import { getConversationsModel } from "../models/conversations.model.js";
+import { getMessagesModel } from "../models/message.model.js";
+import type { IMessage, IMessageMediaItem } from "../models/message.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { normalizeDocumentationSlug } from "../constants/documentation.js";
 

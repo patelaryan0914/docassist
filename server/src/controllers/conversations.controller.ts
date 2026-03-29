@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from "express"
-import { getConversationsModel } from "../models/conversations.model";
-import { getMessagesModel } from "../models/message.model";
-import { getConnection } from "../utils/Connections";
-import { ApiResponse } from "../utils/ApiResponse";
-import { ApiError } from "../utils/ApiError";
+import { getConversationsModel } from "../models/conversations.model.js";
+import { getMessagesModel } from "../models/message.model.js";
+import { getConnection } from "../utils/Connections.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { ApiError } from "../utils/ApiError.js";
 import { normalizeDocumentationSlug } from "../constants/documentation.js";
 
 function escapeRegex(value: string): string {

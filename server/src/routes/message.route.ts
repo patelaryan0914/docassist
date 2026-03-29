@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { auth } from "../middlewares/authentication.middleware";
-import { validate } from "../middlewares/validate.middleware";
-import { createMessageSchema } from "../utils/ValidationSchema";
+import { auth } from "../middlewares/authentication.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
+import { createMessageSchema } from "../utils/ValidationSchema.js";
 import {
     createMessage,
     getMessagesByConversation,
-} from "../controllers/message.controller";
+} from "../controllers/message.controller.js";
 
 const router = Router();
 
