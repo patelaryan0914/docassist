@@ -85,7 +85,8 @@ export function NavUser({
               onClick={() => setTheme("light")}
               className={cn(
                 "rounded-lg",
-                theme === "light" && "bg-primary/10 text-primary focus:bg-primary/15"
+                theme === "light" &&
+                  "bg-primary/10 text-primary focus:bg-primary/15"
               )}
             >
               <Sun />
@@ -95,7 +96,8 @@ export function NavUser({
               onClick={() => setTheme("dark")}
               className={cn(
                 "rounded-lg",
-                theme === "dark" && "bg-primary/10 text-primary focus:bg-primary/15"
+                theme === "dark" &&
+                  "bg-primary/10 text-primary focus:bg-primary/15"
               )}
             >
               <Moon />
@@ -105,7 +107,8 @@ export function NavUser({
               onClick={() => setTheme("system")}
               className={cn(
                 "rounded-lg",
-                theme === "system" && "bg-primary/10 text-primary focus:bg-primary/15"
+                theme === "system" &&
+                  "bg-primary/10 text-primary focus:bg-primary/15"
               )}
             >
               <Monitor />
@@ -118,7 +121,7 @@ export function NavUser({
                   const res = await signOut()
                   if (res.status == 200) toast.success(res.data.message)
                   dispatch(signOutStore())
-                  router.push("/sign-in")
+                  router.push("/")
                 } catch (err) {
                   toast.error("Something Went Wrong.")
                   console.log("Logout Error", err)

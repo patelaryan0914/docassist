@@ -54,7 +54,6 @@ import {
   readLastDocumentation,
   writeLastDocumentation,
 } from "@/lib/doc-preference"
-import { Badge } from "@/components/ui/badge"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -499,12 +498,6 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Badge
-                variant="secondary"
-                className="hidden shrink-0 text-[10px] font-medium sm:inline-flex"
-              >
-                {docLabel}
-              </Badge>
             </div>
             <p className="truncate text-xs text-muted-foreground sm:max-w-[min(100%,280px)]">
               Chatting with:{" "}

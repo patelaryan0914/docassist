@@ -1,5 +1,13 @@
+import type { Metadata } from "next"
 import { SignupForm } from "@/components/signup-form"
 import { AppShellBackground } from "@/components/app-shell-background"
+import { SITE_NAME } from "@/lib/site"
+
+export const metadata: Metadata = {
+  title: "Sign up",
+  description: `Create a ${SITE_NAME} account and start asking questions across Stripe, LiveKit, Firebase docs, and more.`,
+  robots: { index: true, follow: true },
+}
 
 export default function SignupPage() {
   return (

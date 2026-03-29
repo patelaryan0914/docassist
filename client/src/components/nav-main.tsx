@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { useState, useRef, useMemo } from "react"
+import { useState, useRef, useMemo, useLayoutEffect, useEffect } from "react"
 import { APP_DOCUMENTATION_OPTIONS } from "@/lib/app-documentation-options"
 import { parseDocSlug } from "@/lib/doc-preference"
 import Link from "next/link"
@@ -84,14 +84,37 @@ export function NavMain({
 
   const inputRef = useRef<HTMLInputElement | null>(null)
 
+  useLayoutEffect(() => {
+    if (!renamingId) return
+    const el = inputRef.current
+    if (!el) return
+    el.focus({ preventScroll: true })
+    el.select()
+  }, [renamingId])
+
+  useEffect(() => {
+    if (!renamingId) return
+    const run = () => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus({ preventScroll: true })
+      el.select()
+    }
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(run)
+    })
+    const t = window.setTimeout(run, 0)
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      clearTimeout(t)
+    }
+  }, [renamingId])
+
   const startRename = (id: string, name: string) => {
     setRenamingId(id)
     setRenameValue(name)
-
-    setTimeout(() => {
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    }, 0)
   }
 
   const saveRename = async (id: string, original: string) => {
@@ -165,6 +188,7 @@ export function NavMain({
                       <div className="relative flex h-9 w-full items-center overflow-hidden rounded-lg border border-primary/25 bg-primary/5 px-2">
                         <Input
                           ref={inputRef}
+                          autoFocus
                           value={renameValue}
                           onChange={(e) => setRenameValue(e.target.value)}
                           onBlur={() => saveRename(c._id, c.name)}
@@ -175,7 +199,7 @@ export function NavMain({
                               setRenameValue(c.name)
                             }
                           }}
-                          className="min-w-0 flex-1 border-none bg-transparent pr-8 text-sm font-medium shadow-none outline-none selection:bg-muted/50 selection:text-foreground focus-visible:border-transparent focus-visible:ring-0"
+                          className="min-w-0 flex-1 border-none bg-transparent pr-8 text-sm font-medium shadow-none outline-none caret-primary selection:bg-sky-400/35 selection:text-foreground dark:selection:bg-sky-400/30 focus-visible:border-transparent focus-visible:ring-0"
                         />
 
                         <Button
@@ -223,7 +247,11 @@ export function NavMain({
                             </Button>
                           </DropdownMenuTrigger>
 
-                          <DropdownMenuContent align="start" className="w-40">
+                          <DropdownMenuContent
+                            align="start"
+                            className="w-40"
+                            onCloseAutoFocus={(e) => e.preventDefault()}
+                          >
                             <DropdownMenuGroup>
                               <DropdownMenuItem
                                 onClick={(e) => {

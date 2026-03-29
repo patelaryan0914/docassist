@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">DocAssist</title>
+  <desc id="desc">Documentation pages with AI assistance — DocAssist logo</desc>
+  <defs>
+    <linearGradient id="da-doc" x1="12" y1="6" x2="42" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5b21b6"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="da-fold" x1="36" y1="6" x2="50" y2="22" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6d28d9"/>
+      <stop offset="1" stop-color="#5b21b6"/>
+    </linearGradient>
+    <linearGradient id="da-spark" x1="44" y1="12" x2="58" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e9d5ff"/>
+      <stop offset="1" stop-color="#c4b5fd"/>
+    </linearGradient>
+  </defs>
+  <!-- Doc sheet -->
+  <path
+    fill="url(#da-doc)"
+    d="M14 6h22l12 12v36a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z"
+  />
+  <!-- Folded corner -->
+  <path fill="url(#da-fold)" d="M36 6v12a2 2 0 0 0 2 2h10L36 6z"/>
+  <path fill="#1e1b4b" fill-opacity="0.22" d="M48 18H38a2 2 0 0 1-2-2V6l12 12z"/>
+  <!-- Body text lines -->
+  <rect x="18" y="26" width="22" height="3.2" rx="1.6" fill="#f5f3ff" fill-opacity="0.9"/>
+  <rect x="18" y="34.5" width="17" height="3.2" rx="1.6" fill="#ddd6fe" fill-opacity="0.55"/>
+  <rect x="18" y="43" width="19" height="3.2" rx="1.6" fill="#ddd6fe" fill-opacity="0.4"/>
+  <!-- AI assist sparkle -->
+  <path
+    fill="url(#da-spark)"
+    d="M50 11.5c.35-1.05 1.9-1.05 2.25 0l.55 1.75 1.75.55c1.05.35 1.05 1.9 0 2.25l-1.75.55L52.25 19c-.35 1.05-1.9 1.05-2.25 0l-.55-1.75-1.75-.55c-1.05-.35-1.05-1.9 0-2.25l1.75-.55L50 11.5z"
+  />
+</svg>

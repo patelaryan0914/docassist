@@ -1,5 +1,13 @@
+import type { Metadata } from "next"
 import { SigninForm } from "@/components/signin-form"
 import { AppShellBackground } from "@/components/app-shell-background"
+import { SITE_NAME } from "@/lib/site"
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  description: `Sign in to ${SITE_NAME} and chat with your product documentation with AI.`,
+  robots: { index: true, follow: true },
+}
 
 export default function SigninPage() {
   return (
