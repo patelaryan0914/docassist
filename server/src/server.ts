@@ -16,14 +16,14 @@ import messageRoutes from './routes/message.route.js';
 import uploadRoutes from './routes/upload.route.js';
 import scheduleRoutes from './routes/schedule.route.js';
 import dotenv from "dotenv";
-dotenv.config({ path: ".env.dev" });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const mode = process.env.APP_MODE || 'api';
 
 const app = express();
 const dir = path.join(__dirname, '../public/images');
+dotenv.config({ path: path.join(__dirname, '../.env.dev') });
+const mode = process.env.APP_MODE || 'api';
 app.use(
     cors({
         origin: ['http://localhost:3000', "https://docassist.aryan-dev.in"],
