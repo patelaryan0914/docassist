@@ -33,4 +33,4 @@ Website: https://docassist.aryan-dev.in
 
 ## Authors
 
-Shruti Panchal
+Aryan Patel
