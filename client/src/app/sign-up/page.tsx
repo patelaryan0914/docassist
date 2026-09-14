@@ -5,7 +5,7 @@ import { SITE_NAME } from "@/lib/site"
 
 export const metadata: Metadata = {
   title: "Sign up",
-  description: `Create a ${SITE_NAME} account and start asking questions across Stripe, LiveKit, Firebase docs, and more.`,
+  description: `Create a ${SITE_NAME} account and start asking questions across Stripe, LiveKit, and Next.js docs.`,
   robots: { index: true, follow: true },
 }
 

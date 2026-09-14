@@ -9,48 +9,17 @@ export const signUpSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters long'),
 });
 
-export const signInSchema = z
-  .object({
-    signInWith: z.enum(['credentials', 'google']),
-    email_number: z.union([
-      z.email('InvalId email address'),
-      z.string().regex(/^[0-9]{10}$/, 'Mobile number must be exactly 10 digits'),
-    ]).optional(),
-    password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters long')
-      .optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.signInWith === 'credentials') {
-      if (!data.email_number) {
-        ctx.addIssue({
-          path: ['email_number'],
-          message:
-            'Email or mobile number is required for this verification type',
-          code: 'custom',
-        });
-      }
-      if (!data.password) {
-        ctx.addIssue({
-          path: ['password'],
-          message: 'Password is required for this verification type',
-          code: 'custom',
-        });
-      }
-    }
-  });
-
-export const googleLoginIdTokenSchema = z.object({
-  idToken: z.string().min(1, 'Id Token is required'),
-  userType: z.string().min(1, 'User type is required'),
+export const signInSchema = z.object({
+  email_number: z.union([
+    z.email('InvalId email address'),
+    z.string().regex(/^[0-9]{10}$/, 'Mobile number must be exactly 10 digits'),
+  ]),
+  password: z.string().min(8, 'Password must be at least 8 characters long'),
 });
 
 const documentationSlugSchema = z.enum([
   'stripe',
   'livekit',
-  'firebase',
-  'openai',
   'nextjs',
 ]);
 
@@ -68,13 +37,31 @@ export const updateConversationSchema = z
     message: 'Provide name and/or documentation',
   });
 
+export const updateProfileSchema = z
+  .object({
+    name: z.string().min(1, 'Name is required').optional(),
+    email: z.email('Invalid email address').optional(),
+    photo: z.union([z.url('Invalid photo URL'), z.literal('')]).optional(),
+  })
+  .refine(
+    (data) =>
+      data.name !== undefined ||
+      data.email !== undefined ||
+      data.photo !== undefined,
+    { message: 'Provide at least one field to update' },
+  );
+
 export { documentationSlugSchema };
+
+export const classifyDocumentationSchema = z.object({
+  query: z.string().min(1, 'Query is required').max(4000),
+});
 
 export const createMessageSchema = z
   .object({
     conversationId: z.string().optional(),
     content: z.string().optional().default(''),
-    provider: z.enum(['openai', 'groq', 'anthropic', 'google']).default('groq'),
+    provider: z.enum(['groq']).default('groq'),
     model: z.string().optional().default('openai/gpt-oss-120b'),
     documentation: documentationSlugSchema.optional(),
     media: z
@@ -100,10 +87,3 @@ export const createMessageSchema = z
       });
     }
   });
-
-export const createScheduleItemSchema = z.object({
-  kind: z.enum(['reminder', 'questionnaire', 'appointment']),
-  title: z.string().min(1, 'Title is required'),
-  scheduledAt: z.coerce.date(),
-  isActive: z.boolean().optional().default(true),
-});

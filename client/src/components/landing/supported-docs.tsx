@@ -3,43 +3,28 @@
 import { cn } from "@/lib/utils"
 import type { DocSlug } from "@/lib/docassist/types"
 import { invokeDocAssistSkill } from "@/lib/docassist/router"
+import { DocBrandMark } from "@/components/doc-brand-mark"
 import { ScrollReveal } from "./scroll-reveal"
 import { useLanding } from "./landing-context"
 
 const DOCS: {
   id: DocSlug
   name: string
-  accent: string
   blurb: string
 }[] = [
   {
     id: "stripe",
     name: "Stripe",
-    accent: "from-violet-500/30 to-indigo-500/20",
     blurb: "Payments & billing",
   },
   {
     id: "livekit",
     name: "LiveKit",
-    accent: "from-sky-500/25 to-cyan-500/15",
     blurb: "Realtime media",
-  },
-  {
-    id: "firebase",
-    name: "Firebase",
-    accent: "from-amber-500/25 to-orange-500/15",
-    blurb: "Backend & auth",
-  },
-  {
-    id: "openai",
-    name: "OpenAI",
-    accent: "from-emerald-500/25 to-teal-500/15",
-    blurb: "Models & APIs",
   },
   {
     id: "nextjs",
     name: "Next.js",
-    accent: "from-zinc-400/25 to-zinc-600/15",
     blurb: "App framework",
   },
 ]
@@ -62,7 +47,7 @@ export function SupportedDocs() {
         </p>
       </ScrollReveal>
 
-      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {DOCS.map((d, i) => {
           const active = selectedDoc === d.id
           const selection = invokeDocAssistSkill("selectDocumentation", {
@@ -82,12 +67,7 @@ export function SupportedDocs() {
                     : "border-border/80 bg-card/40 hover:border-primary/25"
                 )}
               >
-                <div
-                  className={cn(
-                    "mb-4 h-12 rounded-xl bg-linear-to-br opacity-90 ring-1 ring-white/10",
-                    d.accent
-                  )}
-                />
+                <DocBrandMark id={d.id} className="mb-4" />
                 <div className="text-lg font-semibold tracking-tight">
                   {selection.label}
                 </div>

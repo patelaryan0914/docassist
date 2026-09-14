@@ -5,7 +5,7 @@ export const SITE_AUTHOR = "Patel Aryan"
 export const SITE_NAME = "DocAssist"
 
 export const SITE_DESCRIPTION =
-  "Select Stripe, LiveKit, Firebase, and more — ask questions, get instant context-aware answers with code snippets."
+  "Select Stripe, LiveKit, or Next.js — ask questions, get instant context-aware answers with code snippets."
 
 export const SITE_TITLE_DEFAULT = `${SITE_NAME} — Chat with developer documentation`
 
@@ -13,7 +13,7 @@ export const SITE_KEYWORDS = [
   "developer documentation",
   "Stripe docs",
   "LiveKit",
-  "Firebase",
+  "Next.js",
   "AI chat",
   "documentation assistant",
   "code snippets",

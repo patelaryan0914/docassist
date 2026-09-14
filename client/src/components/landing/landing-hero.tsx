@@ -94,7 +94,7 @@ export function LandingHero() {
             </span>
           </h1>
           <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Chat with developer documentation like Stripe, LiveKit, and more —
+            Chat with developer documentation like Stripe, LiveKit, and Next.js —
             instantly. Context-aware answers with code snippets, no tab
             hopping.
           </p>

@@ -1,8 +1,6 @@
 export type DocSlug =
   | "stripe"
   | "livekit"
-  | "firebase"
-  | "openai"
   | "nextjs"
 
 export type SelectDocumentationInput = {

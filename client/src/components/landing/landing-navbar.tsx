@@ -2,11 +2,25 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
+import { cn, userInitials } from "@/lib/utils"
 import { DocAssistMark } from "@/components/doc-assist-mark"
 import { Button } from "@/components/ui/button"
-import { Menu, X } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { LogOut, Menu, MessageSquare, Search, UserRound, X } from "lucide-react"
 import { useLanding } from "./landing-context"
+import { useAppDispatch, useAppSelector } from "@/store/hooks"
+import { signOutStore } from "@/store/authSlice"
+import { signOut } from "@/lib/axios"
+import { toast } from "sonner"
 
 const links = [
   { href: "#docs", label: "Docs" },
@@ -18,6 +32,9 @@ const links = [
 
 export function LandingNavbar() {
   const { setCommandOpen } = useLanding()
+  const dispatch = useAppDispatch()
+  const router = useRouter()
+  const { isLoggedIn, userInfo } = useAppSelector((state) => state.auth)
   const [open, setOpen] = React.useState(false)
   const [scrolled, setScrolled] = React.useState(false)
 
@@ -27,6 +44,17 @@ export function LandingNavbar() {
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
+
+  const handleSignOut = React.useCallback(async () => {
+    try {
+      const res = await signOut()
+      if (res.status === 200) toast.success(res.data.message)
+      dispatch(signOutStore())
+      router.push("/")
+    } catch {
+      toast.error("Something went wrong.")
+    }
+  }, [dispatch, router])
 
   return (
     <header
@@ -56,21 +84,79 @@ export function LandingNavbar() {
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="hidden text-muted-foreground sm:inline-flex"
+            size="icon-sm"
+            className="rounded-full text-muted-foreground"
             onClick={() => setCommandOpen(true)}
+            aria-label="Search"
           >
-            <kbd className="mr-1 hidden rounded border border-border bg-muted/80 px-1.5 py-0.5 font-mono text-[10px] lg:inline">
-              ⌘K
-            </kbd>
-            <span className="lg:sr-only">Search</span>
+            <Search className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
-            <Link href="/sign-in">Sign in</Link>
-          </Button>
-          <Button size="sm" asChild className="shadow-sm shadow-primary/20">
-            <Link href="/sign-up">Start for free</Link>
-          </Button>
+
+          {isLoggedIn ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="h-10 gap-2 rounded-full px-1.5 pr-3"
+                >
+                  <Avatar size="sm" className="size-7">
+                    <AvatarImage src={userInfo.photo} alt={userInfo.name} />
+                    <AvatarFallback>
+                      {userInitials(userInfo.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden max-w-[140px] truncate text-sm font-medium sm:inline">
+                    {userInfo.name || "Account"}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-xl">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col">
+                    <span className="truncate font-medium">
+                      {userInfo.name || "Account"}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {userInfo.email}
+                    </span>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/chat">
+                    <MessageSquare />
+                    Open chat
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/profile">
+                    <UserRound />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => void handleSignOut()}>
+                  <LogOut />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                asChild
+                className="hidden sm:inline-flex"
+              >
+                <Link href="/sign-in">Sign in</Link>
+              </Button>
+              <Button size="sm" asChild className="shadow-sm shadow-primary/20">
+                <Link href="/sign-up">Start for free</Link>
+              </Button>
+            </>
+          )}
+
           <Button
             type="button"
             variant="ghost"
@@ -97,13 +183,32 @@ export function LandingNavbar() {
                 {l.label}
               </a>
             ))}
-            <Link
-              href="/sign-in"
-              className="rounded-lg px-3 py-2 text-sm hover:bg-muted"
-              onClick={() => setOpen(false)}
-            >
-              Sign in
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <Link
+                  href="/chat"
+                  className="rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                  onClick={() => setOpen(false)}
+                >
+                  Open chat
+                </Link>
+                <Link
+                  href="/profile"
+                  className="rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                  onClick={() => setOpen(false)}
+                >
+                  Profile
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/sign-in"
+                className="rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                onClick={() => setOpen(false)}
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
       ) : null}

@@ -29,9 +29,7 @@ export default function middleware(request: NextRequest) {
   const isProtectedRoute =
     pathname.startsWith("/chat") ||
     pathname.startsWith("/c/") ||
-    pathname.startsWith("/profile") ||
-    pathname.startsWith("/settings") ||
-    pathname.startsWith("/user-management")
+    pathname.startsWith("/profile")
 
   if (!isAuth && isProtectedRoute) {
     return NextResponse.redirect(new URL("/sign-in", request.url))

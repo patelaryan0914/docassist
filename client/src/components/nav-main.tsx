@@ -130,7 +130,7 @@ export function NavMain({
         queryClient.invalidateQueries({ queryKey: ["conversations"] })
       }
     } catch {
-      console.error("Failed to rename conversation")
+      toast.error("Failed to rename conversation")
     }
   }
 

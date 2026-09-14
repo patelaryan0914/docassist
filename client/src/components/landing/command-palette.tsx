@@ -25,8 +25,6 @@ type Action = {
 const DOC_COMMANDS: { id: DocSlug; label: string }[] = [
   { id: "stripe", label: "Select Stripe docs" },
   { id: "livekit", label: "Select LiveKit docs" },
-  { id: "firebase", label: "Select Firebase docs" },
-  { id: "openai", label: "Select OpenAI docs" },
   { id: "nextjs", label: "Select Next.js docs" },
 ]
 

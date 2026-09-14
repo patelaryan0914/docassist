@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 import { ApiResponse } from '../utils/ApiResponse.js';
-import axios from 'axios';
 import { ApiError } from '../utils/ApiError.js';
 import {
   decodeRefreshToken,
@@ -17,12 +17,16 @@ import {
   hashPassword,
   verifyPassword,
 } from '../functions/encrypt.functions.js'
-import {
-  getGoogleAuthURL,
-  googleClient,
-} from '../functions/google.functions.js';
 import { type ClientSession } from 'mongoose';
 import { getUsersModel, IUsers } from "../models/users.model.js";
+
+const cookieOptions = (maxAge: number) => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  domain: process.env.NODE_ENV === 'production' ? '.aryan-dev.in' : 'localhost',
+  sameSite: 'lax' as const,
+  maxAge,
+});
 
 export const signUp = async (
   req: Request,
@@ -35,8 +39,6 @@ export const signUp = async (
       email_number,
       name,
       password,
-      userType,
-      uniqueCode,
     } = req.body;
     const dbConnection = await getConnection()
     const User = getUsersModel(dbConnection);
@@ -128,221 +130,53 @@ export const signIn = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { signInWith, email_number, password } =
-      req.body;
-    switch (signInWith) {
-      case 'google':
-        try {
-          const { userType = 'patient' } = req.body;
-          const url = getGoogleAuthURL({ userType });
-          res.status(200).json(ApiResponse.success({ url }, 'Google Auth URL'));
-          return;
-        } catch (error) {
-          next(error);
-        }
-        break;
-      case 'credentials':
-        const dbConnection = await getConnection()
-        const User = getUsersModel(dbConnection);
-        const Account = getAccountsModel(dbConnection);
-        const user = await User.findOne({
-          $or: [{ mobileNumber: email_number }, { email: email_number }],
-        }).select('mobileNumber email name verified');
-        if (!user) {
-          throw ApiError.unauthorized('User does not exist!');
-        }
-        if (user.status == 'deleted') {
-          throw ApiError.unauthorized(
-            'Your account is deleted contact admin to recover.',
-          );
-        }
-        const account = await Account.findOne({
-          userId: user._id,
-          provider: 'credentials',
-        });
-        if (!account) {
-          throw ApiError.unauthorized('Account does not exist!');
-        }
-        const isPasswordValid = await verifyPassword(
-          password,
-          account.password!,
-        );
-        if (!isPasswordValid) {
-          throw ApiError.unauthorized('Invalid credentials');
-        }
-        const accessToken = generateAccessToken({
-          userId: user._id,
-        });
-        const refreshToken = generateRefreshToken({
-          userId: user._id,
-        });
-        res
-          .status(201)
-          .cookie('accessToken', accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            domain: process.env.NODE_ENV === 'production' ? 'aryan-dev.in' : 'localhost',
-            sameSite: 'lax',
-            maxAge: 24 * 60 * 60 * 1000,
-          })
-          .cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            domain: process.env.NODE_ENV === 'production' ? 'aryan-dev.in' : 'localhost',
-            sameSite: 'lax',
-            maxAge: 24 * 60 * 60 * 1000 * 365,
-          })
-          .json(
-            ApiResponse.success(
-              {
-                userDetails: user,
-                accessToken,
-                refreshToken,
-              },
-              'User signed in successfully',
-            ),
-          );
-        break;
-      default:
-        break;
-    }
-    return;
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const googleAuthCallback = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  let session: ClientSession | undefined;
-  try {
-    const code = req.query.code as string;
-    const state = req.query.state as string;
-
-    if (!code || !state) {
-      throw ApiError.badRequest('Missing code or state');
-    }
-
-    const data = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
-
-    const { tokens } = await googleClient.getToken(code);
-    if (!tokens) throw ApiError.badRequest('Failed to exchange token');
-
-    googleClient.setCredentials(tokens);
-
-    const { data: google } = await axios.get(
-      'https://www.googleapis.com/oauth2/v2/userinfo',
-      {
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
-      },
-    );
-
-    const { email, name, picture } = google;
-    const dbConnection = await getConnection();
-    session = await dbConnection.startSession();
-    session.startTransaction();
+    const { email_number, password } = req.body;
+    const dbConnection = await getConnection()
     const User = getUsersModel(dbConnection);
     const Account = getAccountsModel(dbConnection);
-    let existingUser = await User.findOne({ email }).session(session);
-
-    if (existingUser) {
-      let account = await Account.findOne({ userId: existingUser._id }).session(session);
-
-      if (account) {
-        account.provider = 'google';
-        account.accessToken = tokens.access_token;
-        account.idToken = tokens.id_token;
-        if (tokens.expiry_date)
-          account.accessTokenExpiresAt = new Date(tokens.expiry_date);
-        if (tokens.refresh_token) account.refreshToken = tokens.refresh_token;
-
-        await account.save({ session });
-      }
-
-      await session.commitTransaction();
-      session.endSession();
-      const accessToken = generateAccessToken({
-        userId: existingUser._id,
-      });
-      const refreshToken = generateRefreshToken({
-        userId: existingUser._id,
-      });
-      res
-        .status(201)
-        .cookie('accessToken', accessToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          domain: process.env.NODE_ENV === 'production' ? 'aryan-dev.in' : 'localhost',
-          sameSite: 'lax',
-          maxAge: 24 * 60 * 60 * 1000,
-        })
-        .cookie('refreshToken', refreshToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          domain: process.env.NODE_ENV === 'production' ? 'aryan-dev.in' : 'localhost',
-          sameSite: 'lax',
-          maxAge: 24 * 60 * 60 * 1000 * 365,
-        })
-        .json(
-          ApiResponse.success(
-            {
-              accessToken,
-              refreshToken,
-            },
-            'User signed in successfully',
-          ),
-        );
-      return;
+    const user = await User.findOne({
+      $or: [{ mobileNumber: email_number }, { email: email_number }],
+    }).select('mobileNumber email name verified');
+    if (!user) {
+      throw ApiError.unauthorized('User does not exist!');
     }
-    const newUser = new User({
-      name,
-      photo: picture,
-      email,
-      emailVerified: true,
-      status: "verified"
+    if (user.status == 'deleted') {
+      throw ApiError.unauthorized(
+        'Your account is deleted contact admin to recover.',
+      );
+    }
+    const account = await Account.findOne({
+      userId: user._id,
+      provider: 'credentials',
     });
-    await newUser.save({ session });
-    await Account.create({
-      userId: newUser._id,
-      provider: 'google',
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      idToken: tokens.id_token,
-      accessTokenExpiresAt: tokens.expiry_date
-        ? new Date(tokens.expiry_date)
-        : null,
-    }, { session });
-    await session.commitTransaction();
-    session.endSession();
+    if (!account) {
+      throw ApiError.unauthorized('Account does not exist!');
+    }
+    const isPasswordValid = await verifyPassword(
+      password,
+      account.password!,
+    );
+    if (!isPasswordValid) {
+      throw ApiError.unauthorized('Invalid credentials');
+    }
     const accessToken = generateAccessToken({
-      userId: newUser._id,
+      userId: user._id,
     });
     const refreshToken = generateRefreshToken({
-      userId: newUser._id,
+      userId: user._id,
     });
-
     res
       .status(201)
-      .cookie('accessToken', accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? 'aryan-dev.om' : undefined,
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000,
-      })
-      .cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? 'aryan-dev.in' : undefined,
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000 * 365,
-      })
+      .cookie('accessToken', accessToken, cookieOptions(24 * 60 * 60 * 1000))
+      .cookie(
+        'refreshToken',
+        refreshToken,
+        cookieOptions(24 * 60 * 60 * 1000 * 365),
+      )
       .json(
         ApiResponse.success(
           {
+            userDetails: user,
             accessToken,
             refreshToken,
           },
@@ -351,138 +185,160 @@ export const googleAuthCallback = async (
       );
     return;
   } catch (error) {
-    try {
-      if (session && session.inTransaction()) {
-        await session.abortTransaction();
-      }
-    } catch (abortErr) {
-      req.logger.error("Mongodb session abort error", abortErr);
-    } finally {
-      if (session) session.endSession();
-    }
     next(error);
   }
 };
 
-export const googleLoginWithIdToken = async (
+export const refreshAccessToken = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  let session: ClientSession | undefined;
   try {
-    const { idToken, userType } = req.body;
+    const headerToken = req.header('x-refresh-token')?.replace(/^Bearer\s+/i, '');
+    const cookieToken = req.cookies?.refreshToken as string | undefined;
+    const token = headerToken || cookieToken;
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: [process.env.GOOGLE_CLIENT_ID_ANDROID!, process.env.GOOGLE_CLIENT_ID_WEB!],
-    });
-
-    const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      throw ApiError.unauthorized('Invalid Google token');
+    if (!token) {
+      throw ApiError.unauthorized('No refresh token provided');
     }
 
-    const {
-      email,
-      name,
-      picture,
-      email_verified,
-      sub: googleId,
-    } = payload;
+    let decoded: { userId: string };
+    try {
+      decoded = decodeRefreshToken(token) as { userId: string };
+    } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        throw ApiError.unauthorized('Refresh token expired');
+      }
+      throw ApiError.unauthorized('Invalid refresh token');
+    }
+
+    if (!decoded?.userId) {
+      throw ApiError.unauthorized('Invalid refresh token');
+    }
 
     const dbConnection = await getConnection();
     const User = getUsersModel(dbConnection);
-    const Account = getAccountsModel(dbConnection);
-    const baseConn = await getConnection();
-    session = await baseConn.startSession();
-    session.startTransaction();
-    let user = await User.findOne({ email }).session(session);
-    if (user) {
-      await Account.updateOne(
-        { userId: user._id, provider: 'google' },
-        {
-          $set: {
-            provider: 'google',
-            idToken: googleId,
-            updatedAt: new Date(),
-          },
-        },
-        { upsert: true }
-      ).session(session);
-      await session.commitTransaction();
-      session.endSession();
+    const user = await User.findById(decoded.userId).select('_id status');
 
-      const accessToken = generateAccessToken({
-        userId: user._id,
-      });
+    if (!user) {
+      throw ApiError.unauthorized('User does not exist');
+    }
+    if (user.status === 'deleted') {
+      throw ApiError.unauthorized(
+        'Your account is deleted contact admin to recover.',
+      );
+    }
 
-      const refreshToken = generateRefreshToken({
-        userId: user._id,
-      });
+    const accessToken = generateAccessToken({
+      userId: user._id.toString(),
+    });
+    const refreshToken = generateRefreshToken({
+      userId: user._id.toString(),
+    });
 
-      res.status(200).json(
+    res
+      .status(200)
+      .cookie('accessToken', accessToken, cookieOptions(24 * 60 * 60 * 1000))
+      .cookie(
+        'refreshToken',
+        refreshToken,
+        cookieOptions(24 * 60 * 60 * 1000 * 365),
+      )
+      .json(
         ApiResponse.success(
-          {
-            userDetails: user,
-            accessToken,
-            refreshToken,
-          },
-          'Login successful',
+          { accessToken, refreshToken },
+          'Token refreshed successfully',
         ),
       );
-      return
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMe = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const dbConnection = await getConnection();
+    const User = getUsersModel(dbConnection);
+    const user = await User.findById(req.userId).select(
+      'name email mobileNumber photo status',
+    );
+    if (!user) {
+      throw ApiError.unauthorized('User does not exist');
+    }
+    res.status(200).json(
+      ApiResponse.success({ userDetails: user }, 'User fetched successfully'),
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { name, email, photo } = req.body as {
+      name?: string;
+      email?: string;
+      photo?: string;
+    };
+
+    const dbConnection = await getConnection();
+    const User = getUsersModel(dbConnection);
+    const user = await User.findById(req.userId);
+    if (!user) {
+      throw ApiError.unauthorized('User does not exist');
+    }
+    if (user.status === 'deleted') {
+      throw ApiError.unauthorized(
+        'Your account is deleted contact admin to recover.',
+      );
     }
 
-    const newUser = new User({
-      name,
-      email,
-      photo: picture,
-      emailVerified: email_verified,
-      userType,
-      status: "verified"
-    });
+    if (typeof name === 'string' && name.trim()) {
+      user.name = name.trim();
+    }
+    if (typeof email === 'string' && email.trim()) {
+      if (!isEmail(email.trim())) {
+        throw ApiError.badRequest('Invalid email address');
+      }
+      const existing = await User.findOne({
+        email: email.trim(),
+        _id: { $ne: user._id },
+      });
+      if (existing) {
+        throw ApiError.conflict('Email is already in use');
+      }
+      user.email = email.trim();
+    }
+    if (typeof photo === 'string') {
+      user.photo = photo;
+    }
 
-    const newAccount = new Account({
-      userId: newUser._id,
-      provider: 'google',
-      idToken: googleId,
-    });
+    await user.save();
 
-    await newUser.save({ session });
-    await newAccount.save({ session });
-    await session.commitTransaction();
-    session.endSession();
-    const accessToken = generateAccessToken({
-      userId: newUser._id,
-    });
-
-    const refreshToken = generateRefreshToken({
-      userId: newUser._id,
-    });
-
-    res.status(201).json(
+    res.status(200).json(
       ApiResponse.success(
         {
-          userDetails: user,
-          accessToken,
-          refreshToken,
-          newRegistration: true
+          userDetails: {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            mobileNumber: user.mobileNumber,
+            photo: user.photo,
+          },
         },
-        'Signup successful',
+        'Profile updated successfully',
       ),
     );
-    return
   } catch (error) {
-    try {
-      if (session && session.inTransaction()) {
-        await session.abortTransaction();
-      }
-    } catch (abortErr) {
-      req.logger.error("Mongodb session abort error", abortErr);
-    } finally {
-      if (session) session.endSession();
-    }
     next(error);
   }
 };

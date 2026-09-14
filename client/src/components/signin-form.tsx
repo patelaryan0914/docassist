@@ -51,7 +51,7 @@ export function SigninForm({
         localStorage.setItem("accessToken", res.data.data.accessToken)
         localStorage.setItem("refreshToken", res.data.data.refreshToken)
         toast.success(res.data.message)
-        dispatch(signInStore(res.data.data));
+        dispatch(signInStore(res.data.data))
         router.push("/chat")
       }
     },

@@ -12,9 +12,17 @@ import { getConnection } from "../utils/Connections.js";
 import { ApiError } from "../utils/ApiError.js";
 import { getConversationsModel } from "../models/conversations.model.js";
 import { getMessagesModel } from "../models/message.model.js";
-import type { IMessage, IMessageMediaItem } from "../models/message.model.js";
+import type { IMessage, IMessageMediaItem, IMessageSource } from "../models/message.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { normalizeDocumentationSlug } from "../constants/documentation.js";
+import {
+  buildRagSystemPrompt,
+  formatRetrievedContext,
+  retrieveDocumentationContext,
+  uniqueSources,
+} from "../rag/retrieve.js";
+import { classifyDocumentationIntent } from "../rag/classify-docs.js";
+import logger from "../utils/Logger.js";
 
 type MessageInputMedia = {
   url: string;
@@ -175,6 +183,7 @@ function serializeMessage(doc: any) {
     sender: doc.sender as IMessage["sender"],
     content: doc.content,
     media: (doc.media ?? []) as IMessageMediaItem[],
+    sources: (doc.sources ?? []) as IMessageSource[],
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -263,6 +272,7 @@ export const createMessage = async (
     });
 
     let fullText = "";
+    let reasoningText = "";
 
     const messages = await historyToModelMessages(
       history as Array<{
@@ -278,31 +288,72 @@ export const createMessage = async (
         ? resolveEffectiveGroqModelId(model, messages)
         : model;
 
+    let ragContext = "";
+    let sources: IMessageSource[] = [];
+    try {
+      const retrieved = await retrieveDocumentationContext(
+        effectiveDocumentation,
+        content,
+      );
+      ragContext = formatRetrievedContext(retrieved);
+      sources = uniqueSources(retrieved);
+    } catch (ragError) {
+      logger.warn("RAG retrieval failed; answering without retrieved docs", {
+        uniqueCode: "RAG",
+        documentation: effectiveDocumentation,
+        error: ragError instanceof Error ? ragError.message : String(ragError),
+      });
+    }
+
+    if (sources.length) {
+      writeSse(res, { type: "sources", sources });
+    }
+
     const result = streamText({
       model: resolveModel(provider, modelIdForProvider),
+      system: buildRagSystemPrompt({
+        documentation: effectiveDocumentation,
+        context: ragContext,
+      }),
       messages,
     });
 
     try {
-      for await (const delta of result.textStream) {
-        if (!delta) continue;
+      for await (const part of result.fullStream) {
+        if (part.type === "text-delta" && part.text) {
+          fullText += part.text;
+          writeSse(res, {
+            type: "data",
+            text: part.text,
+          });
+        }
+        if (part.type === "reasoning-delta" && part.text) {
+          reasoningText += part.text;
+        }
+        if (part.type === "error") {
+          throw part.error instanceof Error
+            ? part.error
+            : new Error(String(part.error ?? "Generation failed"));
+        }
+      }
 
-        fullText += delta;
-
-        writeSse(res, {
-          type: "data",
-          text: delta,
-        });
+      if (!fullText.trim()) {
+        const recovered = (await result.text).trim() || reasoningText.trim();
+        if (recovered) {
+          fullText = recovered;
+          writeSse(res, { type: "data", text: recovered });
+        }
       }
 
       const assistantContent = fullText.trim().length
         ? fullText
-        : "I couldn't generate a detailed response for that media. Please try again with another model or prompt.";
+        : "I couldn't generate a response. Please try again.";
 
       const assistantMessage = await Message.create({
         conversationId: newConversationId,
         sender: "assistant",
         content: assistantContent,
+        sources,
       });
 
       writeSse(res, {
@@ -321,6 +372,22 @@ export const createMessage = async (
       });
       res.end();
     }
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const classifyDocumentation = async (
+  req: Request & { userId: string },
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { query } = req.body as { query: string };
+    const intent = await classifyDocumentationIntent(query);
+    res
+      .status(200)
+      .json(ApiResponse.success(intent, "Documentation classified"));
   } catch (error) {
     next(error);
   }
@@ -355,7 +422,7 @@ export const getMessagesByConversation = async (
       conversationId: conversation._id,
     })
       .sort({ createdAt: 1 })
-      .select("_id conversationId sender content media createdAt updatedAt");
+      .select("_id conversationId sender content media sources createdAt updatedAt");
 
     res
       .status(200)

@@ -3,8 +3,15 @@
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Card } from "@/components/ui/card"
-import { ArrowUp, Plus, Loader2, Paperclip } from "lucide-react"
+import {
+  ArrowUp,
+  AudioLines,
+  Brain,
+  Loader2,
+  Mic,
+  Paperclip,
+  Plus,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip"
 import {
@@ -27,7 +34,6 @@ type ChatAttachment = {
   url: string
 }
 
-const initialAttachments: ChatAttachment[] = []
 export function ChatInput({
   onSend,
   isSending,
@@ -46,17 +52,18 @@ export function ChatInput({
   disabled?: boolean
 } = {}) {
   const [value, setValue] = React.useState("")
-  const [attachments, setAttachments] = React.useState(initialAttachments)
+  const [attachments, setAttachments] = React.useState<ChatAttachment[]>([])
   const [isUploading, setIsUploading] = React.useState(false)
+  const [think, setThink] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
 
   const handleRemove = React.useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id))
   }, [])
 
-  const expanded = value.trim().length > 0
   const hasAttachments = attachments.length > 0
   const submit = value.trim().length > 0 || attachments.length > 0
+  const expanded = value.includes("\n") || value.length > 80 || hasAttachments
 
   const handlePickFiles = React.useCallback(() => {
     fileInputRef.current?.click()
@@ -124,69 +131,45 @@ export function ChatInput({
     },
     [handleSend]
   )
+
   return (
-    <Card
+    <div
       className={cn(
-        "mx-auto grid w-full max-w-3xl grid-cols-[auto_1fr_auto] gap-0 rounded-2xl border-border/80 bg-card/70 py-1 shadow-lg ring-1 shadow-primary/5 ring-border/40 supports-backdrop-filter:backdrop-blur-md",
-        expanded
-          ? hasAttachments
-            ? "[grid-template-areas:'files_files_files''textarea_textarea_textarea''media_tags_voice']"
-            : "[grid-template-areas:'textarea_textarea_textarea''media_tags_voice']"
-          : hasAttachments
-            ? "[grid-template-areas:'files_files_files''media_textarea_voice']"
-            : "items-center [grid-template-areas:'media_textarea_voice']"
+        "mx-auto w-full max-w-3xl border border-border/70 bg-card/80 shadow-lg shadow-black/20 ring-1 ring-border/30 supports-backdrop-filter:bg-card/70 supports-backdrop-filter:backdrop-blur-md",
+        expanded ? "rounded-3xl" : "rounded-full"
       )}
     >
-      <div
-        className={cn(
-          "flex items-start justify-start overflow-x-auto [grid-area:files]",
-          hasAttachments && "p-4"
-        )}
-      >
-        <MediaAttachments
-          attachments={attachments.map((a) => ({
-            type: "file" as const,
-            id: a.id,
-            url: a.url,
-            mediaType: a.mimeType,
-            filename: a.filename,
-          }))}
-          onRemove={handleRemove}
-        />
-      </div>
-      <div className="[grid-area:textarea]">
-        <Textarea
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={onKeyDown}
-          className={cn(
-            "min-h-8 border-0 bg-transparent text-[15px] placeholder:text-muted-foreground focus-visible:border-0 focus-visible:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
-            expanded && "min-h-16"
-          )}
-          placeholder="Ask anything about your docs…"
-        />
-      </div>
-      <div
-        className={cn(
-          "flex items-center justify-center px-2 [grid-area:media]",
-          expanded && "py-1"
-        )}
-      >
+      {hasAttachments ? (
+        <div className="px-4 pt-3">
+          <MediaAttachments
+            attachments={attachments.map((a) => ({
+              type: "file" as const,
+              id: a.id,
+              url: a.url,
+              mediaType: a.mimeType,
+              filename: a.filename,
+            }))}
+            onRemove={handleRemove}
+          />
+        </div>
+      ) : null}
+
+      <div className="flex items-end gap-1 px-2 py-1.5">
         <DropdownMenu>
           <Tooltip>
             <DropdownMenuTrigger asChild>
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
-                  variant="outline"
-                  className="cursor-pointer rounded-full border-border/80 bg-background/50 hover:border-primary/30"
+                  variant="ghost"
+                  className="mb-0.5 size-10 shrink-0 cursor-pointer rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
-                  <Plus />
+                  <Plus className="size-5" />
                 </Button>
               </TooltipTrigger>
             </DropdownMenuTrigger>
-            <TooltipContent side="bottom">
-              <p>Add Files or More</p>
+            <TooltipContent side="top">
+              <p>Add files</p>
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent
@@ -195,39 +178,93 @@ export function ChatInput({
             className="rounded-xl border-border/80"
           >
             <DropdownMenuGroup>
-              <DropdownMenuItem key={"photos-files"} onClick={handlePickFiles}>
+              <DropdownMenuItem onClick={handlePickFiles}>
                 <Paperclip />
                 Add photos & files
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-      <div className="flex items-center justify-center px-2 [grid-area:voice]">
+
+        <Textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={onKeyDown}
+          rows={1}
+          className={cn(
+            "min-h-10 flex-1 border-0 bg-transparent px-1 py-2.5 text-[15px] shadow-none placeholder:text-muted-foreground/80 focus-visible:border-0 focus-visible:ring-0",
+            expanded ? "max-h-40 min-h-16" : "max-h-10"
+          )}
+          placeholder="Ask anything"
+        />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "mb-0.5 h-10 shrink-0 cursor-pointer rounded-full px-3 text-muted-foreground hover:bg-muted hover:text-foreground",
+                think && "bg-muted text-foreground"
+              )}
+              onClick={() => setThink((prev) => !prev)}
+            >
+              <Brain className="size-4" />
+              Think
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>{think ? "Thinking on" : "Think before answering"}</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="mb-0.5 size-10 shrink-0 cursor-pointer rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => toast.info("Voice input coming soon")}
+            >
+              <Mic className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>Voice</p>
+          </TooltipContent>
+        </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               size="icon"
-              className="cursor-pointer rounded-full shadow-md shadow-primary/25"
+              className="mb-0.5 size-10 shrink-0 cursor-pointer rounded-full bg-primary text-primary-foreground shadow-none hover:bg-primary/90"
               disabled={
                 Boolean(disabled) ||
                 Boolean(isSending) ||
                 Boolean(isUploading) ||
                 (!!onSend && !submit)
               }
-              onClick={() => void handleSend()}
+              onClick={() => {
+                if (submit) {
+                  void handleSend()
+                  return
+                }
+                toast.info("Voice mode coming soon")
+              }}
             >
               {isSending || isUploading ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : submit ? (
-                <ArrowUp />
+                <ArrowUp className="size-4" />
               ) : (
-                // <AudioLines />
-                <ArrowUp />
+                <AudioLines className="size-4" />
               )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">
+          <TooltipContent side="top">
             <p>
               {isSending
                 ? "Sending…"
@@ -235,11 +272,12 @@ export function ChatInput({
                   ? "Uploading…"
                   : submit
                     ? "Send"
-                    : "Use Voice"}
+                    : "Voice"}
             </p>
           </TooltipContent>
         </Tooltip>
       </div>
+
       <input
         ref={fileInputRef}
         type="file"
@@ -248,6 +286,6 @@ export function ChatInput({
         multiple
         onChange={handleFileInputChange}
       />
-    </Card>
+    </div>
   )
 }

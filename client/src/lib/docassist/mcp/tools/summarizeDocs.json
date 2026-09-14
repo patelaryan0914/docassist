@@ -6,7 +6,7 @@
     "properties": {
       "documentationId": {
         "type": "string",
-        "enum": ["stripe", "livekit", "firebase", "openai", "nextjs"]
+        "enum": ["stripe", "livekit", "nextjs"]
       },
       "sectionHint": { "type": "string" }
     },

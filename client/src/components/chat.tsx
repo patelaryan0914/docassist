@@ -15,6 +15,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  ExternalLink,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -36,6 +37,7 @@ import { useState } from "react"
 import { ChatInput } from "./chat-input"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  classifyDocumentation,
   createConversation,
   createMessageStream,
   getMessages,
@@ -55,6 +57,12 @@ import {
   writeLastDocumentation,
 } from "@/lib/doc-preference"
 import {
+  classifyDocumentationHeuristic,
+  shouldPromptDocumentationSwitch,
+  takePendingAsk,
+  writePendingAsk,
+} from "@/lib/doc-intent"
+import {
   AlertDialog,
   AlertDialogCancel,
   AlertDialogContent,
@@ -67,6 +75,10 @@ import Image from "next/image"
 
 const STREAMING_ASSISTANT_ID = "__streaming__"
 
+function documentationLabel(slug: DocSlug) {
+  return APP_DOCUMENTATION_OPTIONS.find((d) => d.id === slug)?.label ?? slug
+}
+
 type ChatMessageRow = {
   _id: string
   sender: "user" | "assistant"
@@ -77,6 +89,7 @@ type ChatMessageRow = {
     fileName?: string
     mediaType?: "image" | "audio" | "video" | "document"
   }>
+  sources?: Array<{ title: string; url: string }>
 }
 
 export function Chat({ conversationId }: { conversationId?: string }) {
@@ -90,11 +103,21 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   const [docConfirmOpen, setDocConfirmOpen] = useState(false)
   const [pendingDocumentation, setPendingDocumentation] =
     useState<DocSlug | null>(null)
+  const [isClassifying, setIsClassifying] = useState(false)
+  const [docMismatchOpen, setDocMismatchOpen] = useState(false)
+  const [pendingAsk, setPendingAsk] = useState<{
+    content: string
+    media: NonNullable<ChatMessageRow["media"]>
+    detected: DocSlug
+  } | null>(null)
+  const pendingAskRef = React.useRef(pendingAsk)
+  pendingAskRef.current = pendingAsk
   const [messageFeedback, setMessageFeedback] = useState<
     Record<string, "up" | "down" | null>
   >({})
   const pendingConversationIdRef = React.useRef<string | null>(null)
   const didAutoScrollOnConversationRef = React.useRef<string | null>(null)
+  const prevConversationIdRef = React.useRef<string | undefined>(conversationId)
   const bottomRef = React.useRef<HTMLDivElement | null>(null)
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
 
@@ -226,8 +249,13 @@ export function Chat({ conversationId }: { conversationId?: string }) {
   }, [pendingDocumentation, queryClient, router])
 
   React.useEffect(() => {
+    const previousId = prevConversationIdRef.current
+    prevConversationIdRef.current = conversationId
     if (didAutoScrollOnConversationRef.current !== conversationId) {
       didAutoScrollOnConversationRef.current = null
+    }
+    if (previousId && previousId !== conversationId) {
+      setMessages([])
     }
   }, [conversationId])
 
@@ -265,7 +293,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
     }
   }, [messagesData, isSending])
 
-  const handleSend = React.useCallback(
+  const sendNow = React.useCallback(
     async (
       content: string,
       media: Array<{
@@ -273,10 +301,18 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         mimeType: string
         fileName?: string
         mediaType?: "image" | "audio" | "video" | "document"
-      }> = []
+      }> = [],
+      options?: {
+        conversationId?: string
+        documentation?: DocSlug
+      }
     ) => {
       const trimmed = content.trim()
       if ((!trimmed && media.length === 0) || isSending) return
+
+      const targetConversationId = options?.conversationId ?? conversationId
+      const targetDocumentation =
+        options?.documentation ?? activeDocumentation
 
       setIsSending(true)
       pendingConversationIdRef.current = null
@@ -286,8 +322,10 @@ export function Chat({ conversationId }: { conversationId?: string }) {
           {
             content: trimmed,
             media,
-            documentation: activeDocumentation,
-            ...(conversationId ? { conversationId } : {}),
+            documentation: targetDocumentation,
+            ...(targetConversationId
+              ? { conversationId: targetConversationId }
+              : {}),
           },
           {
             onStart: ({ newConversationId, userMessage }) => {
@@ -312,6 +350,18 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   content: "",
                 },
               ])
+            },
+            onSources: (sources) => {
+              setMessages((prev) => {
+                const i = prev.findIndex(
+                  (m) => m._id === STREAMING_ASSISTANT_ID
+                )
+                if (i === -1) return prev
+                const next = [...prev]
+                const row = next[i]
+                next[i] = { ...row, sources }
+                return next
+              })
             },
             onDelta: (text) => {
               setMessages((prev) => {
@@ -340,6 +390,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                     sender: "assistant",
                     content: assistantMessage.content,
                     media: assistantMessage.media ?? [],
+                    sources: assistantMessage.sources ?? [],
                   },
                 ]
               })
@@ -347,13 +398,13 @@ export function Chat({ conversationId }: { conversationId?: string }) {
               const navId = pendingConversationIdRef.current
               pendingConversationIdRef.current = null
 
-              if (navId && !conversationId) {
+              if (navId && !targetConversationId) {
                 router.replace(`/c/${navId}`)
               }
 
               queryClient.invalidateQueries({ queryKey: ["conversations"] })
               queryClient.invalidateQueries({
-                queryKey: ["messages", navId ?? conversationId],
+                queryKey: ["messages", navId ?? targetConversationId],
               })
             },
             onError: (message) => {
@@ -375,6 +426,140 @@ export function Chat({ conversationId }: { conversationId?: string }) {
     },
     [conversationId, activeDocumentation, isSending, queryClient, router]
   )
+
+  const resolveDocumentationIntent = React.useCallback(
+    async (query: string) => {
+      const local = classifyDocumentationHeuristic(query)
+      if (local.documentation && local.confidence === "high") return local
+      try {
+        return await classifyDocumentation(query)
+      } catch {
+        return local
+      }
+    },
+    []
+  )
+
+  const handleSend = React.useCallback(
+    async (
+      content: string,
+      media: Array<{
+        url: string
+        mimeType: string
+        fileName?: string
+        mediaType?: "image" | "audio" | "video" | "document"
+      }> = []
+    ) => {
+      const trimmed = content.trim()
+      if ((!trimmed && media.length === 0) || isSending || isClassifying) return
+
+      if (!trimmed) {
+        await sendNow(trimmed, media)
+        return
+      }
+
+      setIsClassifying(true)
+      try {
+        const intent = await resolveDocumentationIntent(trimmed)
+        if (shouldPromptDocumentationSwitch(activeDocumentation, intent)) {
+          setPendingAsk({
+            content: trimmed,
+            media,
+            detected: intent.documentation,
+          })
+          setDocMismatchOpen(true)
+          return
+        }
+      } finally {
+        setIsClassifying(false)
+      }
+
+      await sendNow(trimmed, media)
+    },
+    [
+      activeDocumentation,
+      isClassifying,
+      isSending,
+      resolveDocumentationIntent,
+      sendNow,
+    ]
+  )
+
+  const stayOnCurrentDocs = React.useCallback(() => {
+    const pending = pendingAskRef.current
+    setDocMismatchOpen(false)
+    setPendingAsk(null)
+    if (!pending) return
+    void sendNow(pending.content, pending.media)
+  }, [sendNow])
+
+  const switchToDetectedDocs = React.useCallback(async () => {
+    const pending = pendingAskRef.current
+    if (!pending) return
+
+    const detected = pending.detected
+    setDocMismatchOpen(false)
+    setPendingAsk(null)
+
+    try {
+      if (!conversationId) {
+        setDraftDocumentation(detected)
+        writeLastDocumentation(detected)
+        await sendNow(pending.content, pending.media, {
+          documentation: detected,
+        })
+        return
+      }
+
+      if (messages.length === 0) {
+        await updateConversation(conversationId, { documentation: detected })
+        writeLastDocumentation(detected)
+        await queryClient.invalidateQueries({
+          queryKey: ["messages", conversationId],
+        })
+        await queryClient.invalidateQueries({ queryKey: ["conversations"] })
+        await sendNow(pending.content, pending.media, {
+          conversationId,
+          documentation: detected,
+        })
+        return
+      }
+
+      const res = await createConversation({ documentation: detected })
+      const id = res.data?.data?.newConversation?._id as string | undefined
+      if (!id) throw new Error("No conversation id returned")
+      writeLastDocumentation(detected)
+      writePendingAsk({
+        conversationId: id,
+        documentation: detected,
+        content: pending.content,
+        media: pending.media,
+      })
+      router.push(`/c/${id}`)
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] })
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Could not switch documentation"
+      )
+    }
+  }, [
+    conversationId,
+    messages.length,
+    pendingAsk,
+    queryClient,
+    router,
+    sendNow,
+  ])
+
+  React.useEffect(() => {
+    if (!conversationId || isSending || isClassifying) return
+    const pending = takePendingAsk(conversationId)
+    if (!pending) return
+    void sendNow(pending.content, pending.media, {
+      conversationId,
+      documentation: pending.documentation,
+    })
+  }, [conversationId, isClassifying, isSending, sendNow])
 
   const renderMedia = React.useCallback(
     (media?: ChatMessageRow["media"], align: "left" | "right" = "left") => {
@@ -430,7 +615,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
 
   const retryAssistantResponse = React.useCallback(
     (assistantMessageId: string) => {
-      if (isSending) return
+      if (isSending || isClassifying) return
       const assistantIndex = messages.findIndex(
         (m) => m._id === assistantMessageId
       )
@@ -444,12 +629,13 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         }
       }
     },
-    [handleSend, isSending, messages]
+    [handleSend, isClassifying, isSending, messages]
   )
 
-  const docLabel =
-    APP_DOCUMENTATION_OPTIONS.find((d) => d.id === activeDocumentation)
-      ?.label ?? activeDocumentation
+  const docLabel = documentationLabel(activeDocumentation)
+  const detectedLabel = pendingAsk
+    ? documentationLabel(pendingAsk.detected)
+    : "other"
 
   return (
     <div className="relative flex min-h-svh flex-1 flex-col bg-background">
@@ -587,7 +773,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
             </p>
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8 pb-6">
+          <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-8 pb-6">
             {messages.map((message) => (
               <Message
                 key={message._id}
@@ -601,7 +787,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   <div className="flex w-full flex-col items-end gap-1">
                     {renderMedia(message.media, "right")}
                     {message.content.trim().length > 0 && (
-                      <MessageContent className="wrap-break-words max-w-[min(100%,85%)] rounded-full whitespace-pre-wrap">
+                      <MessageContent className="wrap-break-words w-fit max-w-[70%] rounded-3xl whitespace-pre-wrap">
                         {message.content}
                       </MessageContent>
                     )}
@@ -618,13 +804,50 @@ export function Chat({ conversationId }: { conversationId?: string }) {
                   </div>
                 ) : (
                   <div className="flex w-full flex-col items-start gap-1">
-                    <MessageContent className="wrap-break-words max-w-[min(100%,92%)] border-none bg-transparent whitespace-pre-wrap">
+                    <MessageContent className="wrap-break-words w-[70%] max-w-[70%] border-none bg-transparent px-0 whitespace-pre-wrap">
                       <MessageResponse>{message.content}</MessageResponse>
                       {renderMedia(message.media, "left")}
                       {message._id === STREAMING_ASSISTANT_ID && (
                         <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary align-middle" />
                       )}
                     </MessageContent>
+                    {!!message.sources?.length && (
+                      <div className="mt-1 flex w-[70%] max-w-[70%] flex-col gap-2">
+                        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                          Sources
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {message.sources.map((source, index) => {
+                            let host = source.title
+                            try {
+                              host = new URL(source.url).hostname.replace(
+                                /^www\./,
+                                ""
+                              )
+                            } catch {
+                              /* keep title */
+                            }
+                            return (
+                              <Link
+                                key={`${source.url}-${index}`}
+                                href={source.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/70 bg-card/70 px-2.5 py-1 text-xs text-foreground/90 transition-colors hover:border-primary/40 hover:bg-muted/60"
+                              >
+                                <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium">
+                                  {index + 1}
+                                </span>
+                                <span className="truncate">
+                                  {source.title || host}
+                                </span>
+                                <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {message._id !== STREAMING_ASSISTANT_ID &&
                       message.content.trim().length > 0 && (
                         <MessageActions className="gap-0.5 pl-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -686,7 +909,7 @@ export function Chat({ conversationId }: { conversationId?: string }) {
         <div ref={bottomRef} className="h-px w-full shrink-0" aria-hidden />
       </div>
 
-      <footer className="sticky bottom-0 z-30 mt-auto shrink-0 bg-transparent px-4 pt-2 pb-3">
+      <footer className="sticky bottom-0 z-30 mt-auto shrink-0 bg-gradient-to-t from-background via-background/95 to-transparent px-4 pt-4 pb-4">
         <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2">
           {showScrollToLatest ? (
             <Button
@@ -702,12 +925,56 @@ export function Chat({ conversationId }: { conversationId?: string }) {
               <ChevronDown className="size-4" />
             </Button>
           ) : null}
-          <ChatInput onSend={handleSend} isSending={isSending} />
+          {isClassifying ? (
+            <p className="text-center text-xs text-muted-foreground">
+              Checking which documentation this question is about…
+            </p>
+          ) : !showScrollToLatest ? (
+            <p className="text-center text-xs text-muted-foreground">
+              DocAssist can make mistakes. Check important info.
+            </p>
+          ) : null}
+          <ChatInput
+            onSend={handleSend}
+            isSending={isSending || isClassifying}
+          />
         </div>
-        <p className="mx-auto h-full max-w-3xl bg-background py-2 text-center text-xs text-muted-foreground">
-          DocAssist can make mistakes. Check important info.
-        </p>
       </footer>
+
+      <AlertDialog
+        open={docMismatchOpen}
+        onOpenChange={(open) => {
+          setDocMismatchOpen(open)
+          if (!open) setPendingAsk(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Switch to {detectedLabel} docs?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This question looks like it is about{" "}
+              <span className="font-medium text-foreground">
+                {detectedLabel}
+              </span>
+              , but this chat is using{" "}
+              <span className="font-medium text-foreground">{docLabel}</span>{" "}
+              documentation. Switch so answers use the matching sources?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={stayOnCurrentDocs}
+            >
+              Stay on {docLabel}
+            </Button>
+            <Button type="button" onClick={() => void switchToDetectedDocs()}>
+              Switch to {detectedLabel}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={docConfirmOpen}

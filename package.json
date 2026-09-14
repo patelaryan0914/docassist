@@ -1,0 +1,8 @@
+{
+  "name": "docassist",
+  "private": true,
+  "scripts": {
+    "ingest": "npm run ingest --prefix server --",
+    "playwright:install": "npm run playwright:install --prefix server"
+  }
+}

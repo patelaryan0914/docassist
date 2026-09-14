@@ -1,8 +1,6 @@
 export const DOCUMENTATION_SLUGS = [
   "stripe",
   "livekit",
-  "firebase",
-  "openai",
   "nextjs",
 ] as const;
 

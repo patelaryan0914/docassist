@@ -7,7 +7,7 @@ const steps = [
   {
     icon: BookOpen,
     title: "Select documentation",
-    body: "Choose Stripe, LiveKit, Firebase, OpenAI, Next.js, or extend with your own corpus.",
+    body: "Choose Stripe, LiveKit, or Next.js documentation.",
   },
   {
     icon: MessageCircleCode,

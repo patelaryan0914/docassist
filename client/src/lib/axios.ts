@@ -66,12 +66,31 @@ const processQueue = (error: any, token: string | null) => {
     failedQueue = [];
 };
 
+const AUTH_SKIP_REFRESH = [
+    "/api/auth/sign-in",
+    "/api/auth/sign-up",
+    "/api/auth/refresh-token",
+    "/api/auth/sign-out",
+];
+
+const redirectToSignIn = () => {
+    if (isBrowser && !window.location.pathname.startsWith("/sign-in")) {
+        window.location.href = "/sign-in";
+    }
+};
+
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error?.config as InternalAxiosRequestConfig;
         const status = error?.response?.status;
+
         if (status !== 401 || !originalRequest) {
+            return Promise.reject(error);
+        }
+
+        const requestUrl = originalRequest.url ?? "";
+        if (AUTH_SKIP_REFRESH.some((path) => requestUrl.includes(path))) {
             return Promise.reject(error);
         }
 
@@ -83,6 +102,7 @@ api.interceptors.response.use(
             return new Promise((resolve, reject) => {
                 failedQueue.push({
                     resolve: (token) => {
+                        originalRequest._retry = true;
                         originalRequest.headers.Authorization = `Bearer ${token}`;
                         resolve(api(originalRequest));
                     },
@@ -91,14 +111,20 @@ api.interceptors.response.use(
             });
         }
 
+        const refreshToken = isBrowser
+            ? localStorage.getItem("refreshToken")
+            : null;
+
+        if (!refreshToken) {
+            clearTokens();
+            redirectToSignIn();
+            return Promise.reject(error);
+        }
+
         originalRequest._retry = true;
         isRefreshing = true;
 
         try {
-            const refreshToken = isBrowser
-                ? localStorage.getItem("refreshToken")
-                : null;
-
             const response = await refreshApi.get("/api/auth/refresh-token", {
                 headers: {
                     "x-refresh-token": `Bearer ${refreshToken}`,
@@ -124,10 +150,7 @@ api.interceptors.response.use(
         } catch (err) {
             processQueue(err, null);
             clearTokens();
-            if (isBrowser) {
-                window.location.href = "/sign-in";
-            }
-
+            redirectToSignIn();
             return Promise.reject(err);
         } finally {
             isRefreshing = false;
@@ -159,7 +182,6 @@ export const signIn = async (email_number: string, password: string) => {
         {
             email_number: email_number,
             password,
-            signInWith: "credentials",
         },
         {
             withCredentials: true,
@@ -170,6 +192,24 @@ export const signIn = async (email_number: string, password: string) => {
 
 export const signOut = async () => {
     const response = await api.get(`/api/auth/sign-out`, {
+        withCredentials: true,
+    });
+    return response;
+};
+
+export const getMe = async () => {
+    const response = await api.get(`/api/auth/me`, {
+        withCredentials: true,
+    });
+    return response;
+};
+
+export const updateProfile = async (body: {
+    name?: string;
+    email?: string;
+    photo?: string;
+}) => {
+    const response = await api.put(`/api/auth/profile`, body, {
         withCredentials: true,
     });
     return response;
@@ -191,14 +231,6 @@ export const getConversations = async (
     return response;
 };
 
-export type ConversationSummary = {
-    _id: string;
-    name: string;
-    documentation: string;
-    createdAt?: string;
-    updatedAt?: string;
-};
-
 export const createConversation = async (body?: {
     name?: string;
     documentation?: string;
@@ -212,6 +244,27 @@ export const createConversation = async (body?: {
         { withCredentials: true },
     );
     return response;
+};
+
+export type DocumentationIntentResult = {
+    documentation: "stripe" | "livekit" | "nextjs" | null;
+    confidence: "high" | "medium" | "low";
+    method?: "heuristic" | "llm" | "none";
+};
+
+export const classifyDocumentation = async (
+    query: string,
+): Promise<DocumentationIntentResult> => {
+    const response = await api.post(
+        `/api/messages/classify`,
+        { query },
+        { withCredentials: true },
+    );
+    return (response.data?.data ?? {
+        documentation: null,
+        confidence: "low",
+        method: "none",
+    }) as DocumentationIntentResult;
 };
 
 export const getMessages = async (conversationId: string, page: number = 1, limit: number = 10) => {
@@ -287,12 +340,13 @@ export type SerializedMessage = {
     }>;
     createdAt?: string;
     updatedAt?: string;
+    sources?: Array<{ title: string; url: string }>;
 };
 
 export type CreateMessageBody = {
     content: string;
     conversationId?: string;
-    provider?: "openai" | "groq" | "anthropic" | "google";
+    provider?: "groq";
     model?: string;
     documentation?: string;
     media?: Array<{
@@ -310,6 +364,7 @@ export type CreateMessageStreamHandlers = {
         documentation?: string;
     }) => void;
     onDelta?: (text: string) => void;
+    onSources?: (sources: Array<{ title: string; url: string }>) => void;
     onDone?: (payload: { assistantMessage: SerializedMessage }) => void;
     onError?: (message: string) => void;
 };
@@ -425,6 +480,12 @@ export async function createMessageStream(
                 });
             } else if (type === "data") {
                 handlers.onDelta?.(String(data.text ?? ""));
+            } else if (type === "sources") {
+                handlers.onSources?.(
+                    Array.isArray(data.sources)
+                        ? (data.sources as Array<{ title: string; url: string }>)
+                        : [],
+                );
             } else if (type === "done") {
                 handlers.onDone?.({
                     assistantMessage: data.assistantMessage as SerializedMessage,

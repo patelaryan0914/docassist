@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next"
-import { Geist_Mono, Figtree } from "next/font/google"
+import { Geist, Geist_Mono, Figtree } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -68,9 +68,14 @@ export const viewport: Viewport = {
 
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" })
 
-const fontMono = Geist_Mono({
+const geist = Geist({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-geist",
+})
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
 })
 
 export default function RootLayout({
@@ -83,21 +88,21 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={cn(
-        "antialiased",
-        fontMono.variable,
-        "font-sans",
-        figtree.variable
+        "antialiased font-sans",
+        figtree.variable,
+        geist.variable,
+        geistMono.variable
       )}
     >
       <body>
-          <ReactQueryProviderWrapper>
-            <ReduxProviderWrapper>
+        <ReactQueryProviderWrapper>
+          <ReduxProviderWrapper>
             <ThemeProvider>
               <TooltipProvider>{children}</TooltipProvider>
-               <Toaster />
+              <Toaster />
             </ThemeProvider>
-            </ReduxProviderWrapper>
-          </ReactQueryProviderWrapper>
+          </ReduxProviderWrapper>
+        </ReactQueryProviderWrapper>
       </body>
     </html>
   )

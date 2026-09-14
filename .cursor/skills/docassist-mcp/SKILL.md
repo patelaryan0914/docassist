@@ -18,7 +18,7 @@ DocAssist splits **UI**, **router**, and **skill implementations** so agents and
 
 ## Tools (mirror of MCP `tools/*.json`)
 
-1. **selectDocumentation** — `documentationId`: `stripe` \| `livekit` \| `firebase` \| `openai` \| `nextjs`
+1. **selectDocumentation** — `documentationId`: `stripe` \| `livekit` \| `nextjs`
 2. **queryDocumentation** — `documentationId` + `query` (natural language)
 3. **generateCodeSnippet** — `documentationId` + `intent` + optional `language`
 4. **summarizeDocs** — `documentationId` + optional `sectionHint`

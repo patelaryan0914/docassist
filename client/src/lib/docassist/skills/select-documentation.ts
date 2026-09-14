@@ -5,10 +5,8 @@ import type {
 } from "../types"
 
 const LABELS: Record<DocSlug, { label: string; indexUrl: string }> = {
-  stripe: { label: "Stripe", indexUrl: "https://stripe.com/docs" },
+  stripe: { label: "Stripe", indexUrl: "https://docs.stripe.com" },
   livekit: { label: "LiveKit", indexUrl: "https://docs.livekit.io" },
-  firebase: { label: "Firebase", indexUrl: "https://firebase.google.com/docs" },
-  openai: { label: "OpenAI", indexUrl: "https://platform.openai.com/docs" },
   nextjs: { label: "Next.js", indexUrl: "https://nextjs.org/docs" },
 }
 

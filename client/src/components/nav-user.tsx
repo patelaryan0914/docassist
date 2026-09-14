@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronsUpDown, LogOut, Monitor, Moon, Sun } from "lucide-react"
+import { ChevronsUpDown, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -23,7 +23,8 @@ import { useRouter } from "next/navigation"
 import { signOut } from "@/lib/axios"
 import { toast } from "sonner"
 import { useTheme } from "next-themes"
-import { cn } from "@/lib/utils"
+import { cn, userInitials } from "@/lib/utils"
+import Link from "next/link"
 
 export function NavUser({
   user,
@@ -50,7 +51,9 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg ring-1 ring-primary/15">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarFallback className="rounded-lg">
+                  {userInitials(user.name)}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -69,7 +72,9 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">
+                    {userInitials(user.name)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -115,6 +120,13 @@ export function NavUser({
               System
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/profile">
+                <UserRound />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={async () => {
                 try {
@@ -122,9 +134,8 @@ export function NavUser({
                   if (res.status == 200) toast.success(res.data.message)
                   dispatch(signOutStore())
                   router.push("/")
-                } catch (err) {
+                } catch {
                   toast.error("Something Went Wrong.")
-                  console.log("Logout Error", err)
                 }
               }}
             >

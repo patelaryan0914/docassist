@@ -7,12 +7,18 @@ export interface IMessageMediaItem {
     mediaType?: 'image' | 'audio' | 'video' | 'document';
 }
 
+export interface IMessageSource {
+    title: string;
+    url: string;
+}
+
 export interface IMessage {
     _id: Schema.Types.ObjectId;
     conversationId: Schema.Types.ObjectId;
     sender: 'user' | 'assistant';
     content: string;
     media?: IMessageMediaItem[];
+    sources?: IMessageSource[];
     createdAt: Date;
     updatedAt: Date;
 }
@@ -32,6 +38,12 @@ const messageSchema = new Schema<IMessage>(
                     enum: ['image', 'audio', 'video', 'document'],
                     required: false,
                 },
+            },
+        ],
+        sources: [
+            {
+                title: { type: String, required: true },
+                url: { type: String, required: true },
             },
         ],
     },

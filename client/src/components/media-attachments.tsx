@@ -4,7 +4,6 @@ import {
   Attachments,
   Attachment,
   AttachmentPreview,
-  AttachmentInfo,
   AttachmentRemove,
 } from "@/components/ai-elements/attachments"
 import type { FileUIPart } from "ai"

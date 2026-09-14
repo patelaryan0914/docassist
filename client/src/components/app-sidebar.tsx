@@ -105,7 +105,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [conversationsData])
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader className="border-b border-sidebar-border/60 pb-2">
+      <SidebarHeader className="border-b border-sidebar-border/60 p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
             <DocAssistMark href="/" size="sm" />
@@ -173,7 +173,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           user={{
             name: userInfo.name,
             email: userInfo.email,
-            avatar: userInfo.image || "",
+            avatar: userInfo.photo || "",
           }}
         />
       </SidebarFooter>
