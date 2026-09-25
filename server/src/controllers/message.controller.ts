@@ -45,8 +45,7 @@ async function fetchRemoteMedia(
   return { bytes: new Uint8Array(buf), mime };
 }
 
-const DEFAULT_GROQ_VISION_MODEL =
-  "meta-llama/llama-4-scout-17b-16e-instruct";
+const DEFAULT_GROQ_VISION_MODEL = "qwen/qwen3.8-27b";
 
 function userContentIsMultimodal(content: UserContent): boolean {
   return typeof content !== "string";
@@ -61,6 +60,7 @@ function messagesIncludeMultimodalUserTurns(messages: ModelMessage[]): boolean {
 function groqModelIdSupportsVisionUserContent(modelId: string): boolean {
   const id = modelId.toLowerCase();
   return (
+    id.includes("qwen") ||
     id.includes("llama-4") ||
     id.includes("llama4") ||
     id.includes("vision")
